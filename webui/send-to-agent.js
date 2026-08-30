@@ -53,9 +53,10 @@
 
     fetch("/api/elements")
       .then(function (r) {
-        return r.json().then(function (arr) {
-          var count = Array.isArray(arr) ? arr.length : 0;
-          return { count: count };
+        return r.json().then(function (data) {
+          // 响应格式: { success, elements: [...], count }
+          var arr = Array.isArray(data) ? data : data.elements || [];
+          return { count: arr.length };
         });
       })
       .catch(function () {

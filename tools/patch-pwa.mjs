@@ -153,7 +153,7 @@ fs.writeFileSync(
 fs.writeFileSync(
   out("sw.js"),
   `// Excalidraw 工作区 Service Worker（PWA 离线缓存）
-const CACHE = "excalidraw-workspace-v1";
+const CACHE = "excalidraw-workspace-v2";
 const APP_SHELL = ["./", "./index.html", "./manifest.json", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", (e) => {
@@ -173,6 +173,20 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== "GET" || url.origin !== self.location.origin) return;
+  // 导航请求（页面/刷新）：网络优先，离线时回退缓存 → 避免旧页面缓存
+  if (e.request.mode === "navigate") {
+    e.respondWith(
+      fetch(e.request)
+        .then((resp) => {
+          const copy = resp.clone();
+          caches.open(CACHE).then((c) => c.put(e.request, copy));
+          return resp;
+        })
+        .catch(() => caches.match(e.request))
+    );
+    return;
+  }
+  // 静态资源：缓存优先 + 后台更新
   e.respondWith(
     caches.match(e.request).then((hit) => hit || fetch(e.request).then((resp) => {
       const copy = resp.clone();
