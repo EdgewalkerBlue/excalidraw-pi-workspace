@@ -1,0 +1,46 @@
+{
+  "generated_at": "2026-08-30T06:18:01.853Z",
+  "canvas_file": "canvas/main.excalidraw",
+  "canvas_stats": {
+    "current": {
+      "total": 14,
+      "nodes": 4,
+      "edges": 2,
+      "texts": 8,
+      "bindings": 2
+    },
+    "previous_commit": {
+      "total": 12,
+      "nodes": 3,
+      "edges": 2,
+      "texts": 7,
+      "bindings": 2
+    }
+  },
+  "changes": {
+    "added_nodes": [
+      {
+        "id": "task-A",
+        "type": "rectangle",
+        "text": "任务A: 实现登录模块",
+        "status": null
+      }
+    ],
+    "deleted_nodes": [],
+    "modified_nodes": [],
+    "added_edges": [],
+    "deleted_edges": [],
+    "modified_edges": []
+  },
+  "task": {
+    "scope": "基于 task-A 实现登录模块",
+    "target_project": "D:\\projects\\excalidraw-workspace",
+    "target_repo": "(本地仓库，无 remote)",
+    "target_branch": "master",
+    "head_commit": "efab83f"
+  },
+  "planned_actions": "1) 新增登录模块代码 2) 运行测试 3) 通过 MCP 更新 task-A 状态为 DONE",
+  "destructive_operations": false,
+  "review_required": true,
+  "approval_status": "PENDING"
+}
