@@ -35,11 +35,11 @@
 2. Chrome 菜单 → 「添加到主屏幕」（安装应用）
 3. 确认图标与名称（Excalidraw 工作区）
 
-## Send to Agent 使用
+## Send to Agent / Approve 使用
 
 1. 打开画布 Web UI（刷新页面，如缓存需硬刷新 Ctrl+F5）
 2. 顶部工具栏可见 **Send to Agent** 按钮（Connected 左侧）
-3. 画完内容后点击，按钮显示 ✓ 已发送
+3. 画完内容后点击 **Send to Agent**（✓ 已发送），再点右侧 **Approve**（✓ 已批准）—— 无需回 Pi 回复
 4. 通知服务须运行（start-canvas.bat 已包含 agent-notify，或单独 ）
 5. **Pi 侧实时通知**：Pi 扩展 agent-notify-watch 实时监听标记 → TUI 弹出通知 + 顶部收件箱 Widget
 6. Pi 检测到标记后走 Review Gate → 处理 → 删除标记（Widget 自动消失）

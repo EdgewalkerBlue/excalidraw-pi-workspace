@@ -11,6 +11,7 @@
   "use strict";
 
   var BTN_ID = "send-to-agent-btn";
+  var APPROVE_BTN_ID = "approve-btn";
   var NOTIFY_PORT = 5010;
 
   function findStatus() {
@@ -31,20 +32,85 @@
   }
 
   function inject() {
-    if (document.getElementById(BTN_ID)) return;
+    if (document.getElementById(BTN_ID) && document.getElementById(APPROVE_BTN_ID)) return;
     var status = findStatus();
     if (!status || !status.parentElement) return;
     var controls = status.parentElement;
 
-    var btn = document.createElement("button");
-    btn.id = BTN_ID;
-    btn.className = "btn-primary";
-    btn.style.marginRight = "4px";
-    btn.textContent = "Send to Agent";
-    btn.title = "将当前画布发送给 Pi Agent 处理";
-    btn.addEventListener("click", sendToAgent);
-    // 放在 Connected 状态左侧
-    controls.insertBefore(btn, status);
+    if (!document.getElementById(BTN_ID)) {
+      var btn = document.createElement("button");
+      btn.id = BTN_ID;
+      btn.className = "btn-primary";
+      btn.style.marginRight = "4px";
+      btn.textContent = "Send to Agent";
+      btn.title = "将当前画布发送给 Pi Agent 处理";
+      btn.addEventListener("click", sendToAgent);
+      // 放在 Connected 状态左侧
+      controls.insertBefore(btn, status);
+    }
+
+    if (!document.getElementById(APPROVE_BTN_ID)) {
+      var approveBtn = document.createElement("button");
+      approveBtn.id = APPROVE_BTN_ID;
+      approveBtn.className = "btn-secondary";
+      approveBtn.style.marginRight = "4px";
+      approveBtn.style.backgroundColor = "#28a745";
+      approveBtn.textContent = "Approve";
+      approveBtn.title = "批准当前画布，通知 Pi 执行（与 Pi 内回复 approve 等效）";
+      approveBtn.addEventListener("click", approveCanvas);
+      // 放在 Send to Agent 右侧（Connected 左侧）
+      var sendBtn = document.getElementById(BTN_ID);
+      if (sendBtn) {
+        controls.insertBefore(approveBtn, sendBtn.nextSibling || status);
+      } else {
+        controls.insertBefore(approveBtn, status);
+      }
+    }
+  }
+
+  function approveCanvas() {
+    var approveBtn = document.getElementById(APPROVE_BTN_ID);
+    setBtn(approveBtn, "sending", "批准中…", true);
+
+    fetch("/api/elements")
+      .then(function (r) {
+        return r.json().then(function (data) {
+          var arr = Array.isArray(data) ? data : data.elements || [];
+          return { count: arr.length };
+        });
+      })
+      .catch(function () {
+        return { count: -1 };
+      })
+      .then(function (info) {
+        var notifyUrl =
+          location.protocol + "//" + location.hostname + ":" + NOTIFY_PORT + "/approve";
+        return fetch(notifyUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            source: "webui",
+            elements: info.count,
+            approved_at: new Date().toISOString(),
+          }),
+        });
+      })
+      .then(function (resp) {
+        if (!resp.ok) throw new Error("approve http " + resp.status);
+        return resp.json();
+      })
+      .then(function () {
+        setBtn(approveBtn, "ok", "✓ 已批准", false);
+        setTimeout(function () {
+          setBtn(approveBtn, "idle", "Approve", false);
+        }, 2500);
+      })
+      .catch(function () {
+        setBtn(approveBtn, "error", "批准失败", false);
+        setTimeout(function () {
+          setBtn(approveBtn, "idle", "Approve", false);
+        }, 2500);
+      });
   }
 
   function sendToAgent() {

@@ -21,6 +21,7 @@ const PORT = parseInt(process.env.AGENT_NOTIFY_PORT || "5010", 10);
 const MARKER_DIR =
   process.env.AGENT_MARKER_DIR || path.resolve(__dirname, "..", ".agent");
 const MARKER_FILE = path.join(MARKER_DIR, "pending.json");
+const APPROVED_FILE = path.join(MARKER_DIR, "approved.json");
 
 const server = http.createServer((req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -39,6 +40,7 @@ const server = http.createServer((req, res) => {
       JSON.stringify({
         ok: true,
         pending: fs.existsSync(MARKER_FILE),
+        approved: fs.existsSync(APPROVED_FILE),
         marker: MARKER_FILE,
       })
     );
@@ -67,6 +69,41 @@ const server = http.createServer((req, res) => {
       );
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: true, marker: MARKER_FILE }));
+    });
+    return;
+  }
+
+  // Web UI Approve 按钮：写入 .agent/approved.json（status: APPROVED）
+  if (req.method === "POST" && req.url === "/approve") {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      let payload = {};
+      try {
+        payload = JSON.parse(body || "{}");
+      } catch {
+        /* ignore */
+      }
+      fs.mkdirSync(MARKER_DIR, { recursive: true });
+      const pending = fs.existsSync(MARKER_FILE)
+        ? JSON.parse(fs.readFileSync(MARKER_FILE, "utf8"))
+        : null;
+      fs.writeFileSync(
+        APPROVED_FILE,
+        JSON.stringify(
+          {
+            approved_at: new Date().toISOString(),
+            status: "APPROVED",
+            pending: pending,
+            ...payload,
+          },
+          null,
+          2
+        ),
+        "utf8"
+      );
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, approved: true, marker: APPROVED_FILE }));
     });
     return;
   }
