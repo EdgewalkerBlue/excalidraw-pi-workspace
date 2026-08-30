@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-30T06:27:18.349Z",
-  "canvas_file": "canvas/main.excalidraw",
+  "generated_at": "2026-08-30T06:27:51.995Z",
+  "canvas_file": "architecture/main.excalidraw",
   "canvas_stats": {
     "current": {
       "total": 16,
@@ -10,50 +10,29 @@
       "bindings": 3
     },
     "previous_commit": {
-      "total": 14,
-      "nodes": 4,
-      "edges": 2,
+      "total": 16,
+      "nodes": 5,
+      "edges": 3,
       "texts": 8,
-      "bindings": 2
+      "bindings": 3
     }
   },
   "changes": {
-    "added_nodes": [
-      {
-        "id": "pi-done",
-        "type": "ellipse",
-        "text": "Pi 已完成: 登\n录模块\n测试 4/4 通过",
-        "status": null
-      }
-    ],
+    "added_nodes": [],
     "deleted_nodes": [],
-    "modified_nodes": [
-      {
-        "id": "task-A",
-        "type": "rectangle",
-        "text": "任务A: 实现登录模块\n[DONE]",
-        "status": null
-      }
-    ],
-    "added_edges": [
-      {
-        "id": "edge-3",
-        "from": "task-A",
-        "to": "pi-done",
-        "label": "输出"
-      }
-    ],
+    "modified_nodes": [],
+    "added_edges": [],
     "deleted_edges": [],
     "modified_edges": []
   },
   "task": {
-    "scope": "task-A 登录模块（phase_5 演示）",
+    "scope": "phase_6 路径迁移验证",
     "target_project": "D:\\projects\\excalidraw-workspace",
     "target_repo": "(本地仓库，无 remote)",
     "target_branch": "master",
-    "head_commit": "00e909a"
+    "head_commit": "7f83c52"
   },
-  "planned_actions": "已完成: 代码+测试+画布回写",
+  "planned_actions": "架构画布迁移到 architecture/main.excalidraw",
   "destructive_operations": false,
   "review_required": true,
   "approval_status": "PENDING"

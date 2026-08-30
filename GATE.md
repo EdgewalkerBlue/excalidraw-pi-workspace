@@ -36,9 +36,9 @@ node tools/review-gate.mjs --task "<任务范围>" --planned "<计划动作>" [-
 
 | 审查项 | 来源 |
 |---|---|
-| canvas file | `canvas/main.excalidraw`（导出） |
+| canvas file | `architecture/main.excalidraw`（导出） |
 | node count / arrow count / binding count | describe 分析 |
-| added / deleted / modified nodes | 与 `git show HEAD:canvas/main.excalidraw` 对比 |
+| added / deleted / modified nodes | 与 `git show HEAD:architecture/main.excalidraw` 对比 |
 | task scope | `--task` 参数 |
 | target Git project | `git config remote.origin.url` |
 | target branch | `git rev-parse --abbrev-ref HEAD` |
@@ -66,7 +66,7 @@ node tools/review-gate.mjs --task "<任务范围>" --planned "<计划动作>" [-
 ## 6. 快照与追溯
 
 - 每次门禁生成的报告存档于 `tools/review-gate-report.json`（被后续覆盖）
-- 画布文件 `canvas/main.excalidraw` 每次 APPROVE 后由 Pi 提交入库（Git 版本化）
+- 画布文件 `architecture/main.excalidraw` 每次 APPROVE 后由 Pi 提交入库（Git 版本化）
 - 提交信息格式：`review-gate: <task scope> - <approve 摘要>`
 
 ## 7. 工具

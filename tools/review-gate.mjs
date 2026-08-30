@@ -4,7 +4,7 @@
  *
  * 职责：在 Pi 执行任何代码修改之前，生成结构化审查报告：
  *   - 画布结构（node / arrow / binding / text 统计）
- *   - 与 Git 上次提交的 canvas/main.excalidraw 对比（新增/删除/修改节点）
+ *   - 与 Git 上次提交的 architecture/main.excalidraw 对比（新增/删除/修改节点）
  *   - 审查元数据（任务范围、目标仓库/分支、计划动作）
  *   - 破坏性操作标记（delete / clear / force push 等需额外确认）
  *
@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT = path.resolve(__dirname, "..");
-const CANVAS_FILE = path.join(PROJECT, "canvas", "main.excalidraw");
+const CANVAS_FILE = path.join(PROJECT, "architecture", "main.excalidraw");
 const REPORT_FILE = path.join(__dirname, "review-gate-report.json");
 
 const args = process.argv.slice(2);
@@ -100,19 +100,19 @@ function readScene(file) {
 
 // ---- 1. 获取当前画布并导出（export 失败必须中止，避免覆盖坏文件） ----
 const desc = mcp("describe");
-const exportOut = mcp("export --out canvas/main.excalidraw");
+const exportOut = mcp("export --out architecture/main.excalidraw");
 if (!exportOut.includes('"success": true')) {
   console.error(`FAIL: export 失败（canvas ${CANVAS_URL} 不可达？）`);
   console.error(exportOut || "(无输出)");
   process.exit(1);
 }
 if (!fs.existsSync(CANVAS_FILE)) {
-  console.error("FAIL: canvas/main.excalidraw 不存在（export 失败？）");
+  console.error("FAIL: architecture/main.excalidraw 不存在（export 失败？）");
   process.exit(1);
 }
 
 // ---- 2. 与 Git HEAD 对比 ----
-const headRaw = run("git show HEAD:canvas/main.excalidraw");
+const headRaw = run("git show HEAD:architecture/main.excalidraw");
 const headScene = headRaw ? JSON.parse(headRaw) : null;
 const currScene = readScene(CANVAS_FILE);
 const curr = analyze(currScene);
@@ -126,7 +126,7 @@ const headCommit = run("git rev-parse --short HEAD") || "none";
 
 const report = {
   generated_at: new Date().toISOString(),
-  canvas_file: "canvas/main.excalidraw",
+  canvas_file: "architecture/main.excalidraw",
   canvas_stats: {
     current: { total: curr.total, nodes: curr.nodes, edges: curr.edges, texts: curr.texts, bindings: curr.bindings },
     previous_commit: { total: prev.total, nodes: prev.nodes, edges: prev.edges, texts: prev.texts, bindings: prev.bindings },
