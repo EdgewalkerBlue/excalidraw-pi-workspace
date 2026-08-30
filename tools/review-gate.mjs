@@ -56,6 +56,20 @@ function analyze(scene) {
   const bindings = edges.filter(
     (e) => e.startBinding?.elementId || e.endBinding?.elementId
   ).length;
+
+  // 文本关联：containerId 优先；浏览器画布导出时 containerId 可能丢失，
+  // 回退用 bbox 包含匹配（文本中心点在节点框内）
+  const findTextFor = (x, y, w, h, id) => {
+    const byId = id ? textsByContainer.get(id) : null;
+    if (byId) return byId.text ?? null;
+    const hit = texts.find((t) => {
+      const cx = t.x + t.width / 2;
+      const cy = t.y + t.height / 2;
+      return cx >= x && cx <= x + w && cy >= y && cy <= y + h;
+    });
+    return hit ? hit.text : null;
+  };
+
   return {
     total: elements.length,
     nodes: nodes.length,
@@ -66,12 +80,12 @@ function analyze(scene) {
       id: e.id,
       from: e.startBinding?.elementId ?? null,
       to: e.endBinding?.elementId ?? null,
-      label: textsByContainer.get(e.id)?.text ?? e.label?.text ?? null,
+      label: findTextFor(e.x - 60, e.y - 30, e.width + 120, e.height + 60, e.id) ?? null,
     })),
     nodeList: nodes.map((n) => ({
       id: n.id,
       type: n.type,
-      text: textsByContainer.get(n.id)?.text ?? n.label?.text ?? null,
+      text: findTextFor(n.x, n.y, n.width, n.height, n.id),
       status: n.metadata?.status ?? null,
     })),
   };
