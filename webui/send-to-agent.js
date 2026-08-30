@@ -156,10 +156,15 @@
         return resp.json();
       })
       .then(function () {
-        setBtn(btn, "ok", "✓ 已发送", false);
+        // 短暂约 1s：绿色背景 + “已发送”，随后恢复蓝色
+        btn.textContent = "已发送";
+        btn.style.backgroundColor = "#28a745";
+        btn.style.opacity = "1";
+        btn.disabled = false;
         setTimeout(function () {
-          setBtn(btn, "idle", "Send to Agent", false);
-        }, 2500);
+          btn.textContent = "Send to Agent";
+          btn.style.backgroundColor = "#007bff";
+        }, 1000);
       })
       .catch(function () {
         setBtn(btn, "error", "通知失败", false);
