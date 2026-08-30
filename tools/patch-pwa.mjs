@@ -232,3 +232,28 @@ if (html.includes(SW_MARK)) {
 }
 
 console.log("PWA 补丁完成。资源: manifest.json / sw.js / icon-192.png / icon-512.png");
+
+// ---------- Send to Agent 注入脚本 ----------
+const SEND_SRC = path.resolve(__dirname, "..", "webui", "send-to-agent.js");
+const SEND_DST = out("send-to-agent.js");
+fs.copyFileSync(SEND_SRC, SEND_DST);
+console.log("send-to-agent.js 已复制到 frontend");
+
+// 幂等注入 <script> 标签（head 末尾，放在 PWA 补丁后）
+html = fs.readFileSync(indexHtml, "utf8");
+const SEND_MARK = "pi-sendtoagent-patch";
+if (html.includes(SEND_MARK)) {
+  console.log("send-to-agent 脚本注入已存在（幂等）");
+} else {
+  const headEnd2 = html.indexOf("</head>");
+  if (headEnd2 < 0) {
+    console.error("未找到 </head>，跳过 send-to-agent 注入");
+  } else {
+    const inject2 = `    <script defer src="./send-to-agent.js"></script> <!-- ${SEND_MARK} -->\n`;
+    html = html.slice(0, headEnd2) + inject2 + html.slice(headEnd2);
+    fs.writeFileSync(indexHtml, html, "utf8");
+    console.log("send-to-agent 脚本已注入 index.html");
+  }
+}
+
+console.log("全部补丁完成。");

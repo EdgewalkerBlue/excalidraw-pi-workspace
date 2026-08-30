@@ -1,5 +1,7 @@
 # 最终验收测试清单（final_acceptance）
 
+> 功能：Web UI 已加入 **Send to Agent** 按钮（Connected 左侧）。点击后通知 Pi Agent（.agent/pending.json 标记），Pi 走 Review Gate 处理。
+
 > 状态标记：✅ 已自动验证 ｜ ⏳ 待 Android 真机验证 ｜ 📋 用户操作
 
 | # | 验收项 | 状态 | 说明 |
@@ -32,6 +34,14 @@
 1. 打开 `http://192.168.0.1:5001`
 2. Chrome 菜单 → 「添加到主屏幕」（安装应用）
 3. 确认图标与名称（Excalidraw 工作区）
+
+## Send to Agent 使用
+
+1. 打开画布 Web UI（刷新页面，如缓存需硬刷新 Ctrl+F5）
+2. 顶部工具栏可见 **Send to Agent** 按钮（Connected 左侧）
+3. 画完内容后点击，按钮显示 ✓ 已发送
+4. 通知服务须运行（start-canvas.bat 已包含 agent-notify，或单独 ）
+5. Pi 检测到标记后走 Review Gate → 处理 → 删除标记
 
 ## 服务管理
 
