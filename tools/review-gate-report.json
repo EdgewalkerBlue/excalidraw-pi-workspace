@@ -1,45 +1,59 @@
 {
-  "generated_at": "2026-08-30T06:18:01.853Z",
+  "generated_at": "2026-08-30T06:27:18.349Z",
   "canvas_file": "canvas/main.excalidraw",
   "canvas_stats": {
     "current": {
+      "total": 16,
+      "nodes": 5,
+      "edges": 3,
+      "texts": 8,
+      "bindings": 3
+    },
+    "previous_commit": {
       "total": 14,
       "nodes": 4,
       "edges": 2,
       "texts": 8,
-      "bindings": 2
-    },
-    "previous_commit": {
-      "total": 12,
-      "nodes": 3,
-      "edges": 2,
-      "texts": 7,
       "bindings": 2
     }
   },
   "changes": {
     "added_nodes": [
       {
-        "id": "task-A",
-        "type": "rectangle",
-        "text": "任务A: 实现登录模块",
+        "id": "pi-done",
+        "type": "ellipse",
+        "text": "Pi 已完成: 登\n录模块\n测试 4/4 通过",
         "status": null
       }
     ],
     "deleted_nodes": [],
-    "modified_nodes": [],
-    "added_edges": [],
+    "modified_nodes": [
+      {
+        "id": "task-A",
+        "type": "rectangle",
+        "text": "任务A: 实现登录模块\n[DONE]",
+        "status": null
+      }
+    ],
+    "added_edges": [
+      {
+        "id": "edge-3",
+        "from": "task-A",
+        "to": "pi-done",
+        "label": "输出"
+      }
+    ],
     "deleted_edges": [],
     "modified_edges": []
   },
   "task": {
-    "scope": "基于 task-A 实现登录模块",
+    "scope": "task-A 登录模块（phase_5 演示）",
     "target_project": "D:\\projects\\excalidraw-workspace",
     "target_repo": "(本地仓库，无 remote)",
     "target_branch": "master",
-    "head_commit": "efab83f"
+    "head_commit": "00e909a"
   },
-  "planned_actions": "1) 新增登录模块代码 2) 运行测试 3) 通过 MCP 更新 task-A 状态为 DONE",
+  "planned_actions": "已完成: 代码+测试+画布回写",
   "destructive_operations": false,
   "review_required": true,
   "approval_status": "PENDING"
