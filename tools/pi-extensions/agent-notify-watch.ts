@@ -53,7 +53,6 @@ export default function (pi: ExtensionAPI) {
     if (approved && approved.status === "APPROVED") {
       const key = `approved:${approved.approved_at ?? ""}|${approved.elements ?? ""}`;
       if (key !== lastKey) {
-        lastKey = key;
         ctx.ui.notify(
           `✅ Web UI Approve 已收到（元素 ${approved.elements ?? "?"} 个）`,
           "info"
@@ -62,8 +61,20 @@ export default function (pi: ExtensionAPI) {
           "✅ 画布已批准（Web UI Approve）",
           `  元素数  : ${approved.elements ?? "?"}`,
           `  时间    : ${approved.approved_at ?? ""}`,
-          "  → Pi 可直接执行画布任务（无需再次 approve）",
+          "  → Pi 自动执行中…",
         ]);
+        // 自动触发 agent 执行画布任务（Pi 无需人工再次提示）
+        try {
+          await pi.sendUserMessage(
+            `【Web UI 已批准画布任务】检测到 approved.json（元素 ${approved.elements ?? "?"} 个，批准时间 ${approved.approved_at ?? ""}）。` +
+              `请读取 D:/projects/excalidraw-workspace/.agent/approved.json 与当前画布内容，` +
+              `按 Review Gate 执行画布任务，完成后清除 .agent 标记。`
+          );
+          lastKey = key;
+        } catch {
+          // 投递失败（如正在 streaming），下轮轮询重试
+          lastKey = "";
+        }
       }
       return;
     }
