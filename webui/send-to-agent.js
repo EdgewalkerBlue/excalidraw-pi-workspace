@@ -1,10 +1,13 @@
 /**
- * Web UI "Send to Agent" 注入脚本
+ * Web UI "Send to Agent / Approve / Reject" 注入脚本
  *
- * 在 Excalidraw Web UI 的连接状态（Connected）左侧插入按钮，
- * 点击后将当前画布快照通知 Pi Agent（写入 .agent/pending.json 标记）。
+ * 在 Excalidraw Web UI 的连接状态（Connected）左侧插入三个按钮：
+ *   - Send to Agent : 发送画布通知给 Pi（蓝色；成功后约 1s 绿色"已发送"）
+ *   - Approve       : 批准画布任务（黄色待处理→绿色已批准；未 Send 时不显示）
+ *   - Reject        : 回退已发送内容/取消执行中任务（红色；未 Send 时不显示）
  *
  * 依赖：tools/agent-notify.mjs（监听 5010）运行中。
+ * 状态同步：3s 轮询 /health（pending / approved / rejected）。
  * 幂等：重复注入安全。
  */
 (function () {
@@ -12,7 +15,13 @@
 
   var BTN_ID = "send-to-agent-btn";
   var APPROVE_BTN_ID = "approve-btn";
+  var REJECT_BTN_ID = "reject-btn";
   var NOTIFY_PORT = 5010;
+
+  var COLOR_BLUE = "#007bff";
+  var COLOR_GREEN = "#28a745";
+  var COLOR_YELLOW = "#ffb300";
+  var COLOR_RED = "#dc3545";
 
   function findStatus() {
     var els = document.querySelectorAll(".controls .status");
@@ -31,8 +40,19 @@
     btn.dataset.state = state;
   }
 
+  function show(btn, showFlag) {
+    if (!btn) return;
+    btn.style.display = showFlag ? "" : "none";
+  }
+
   function inject() {
-    if (document.getElementById(BTN_ID) && document.getElementById(APPROVE_BTN_ID)) return;
+    if (
+      document.getElementById(BTN_ID) &&
+      document.getElementById(APPROVE_BTN_ID) &&
+      document.getElementById(REJECT_BTN_ID)
+    ) {
+      return;
+    }
     var status = findStatus();
     if (!status || !status.parentElement) return;
     var controls = status.parentElement;
@@ -45,9 +65,9 @@
       btn.textContent = "Send to Agent";
       btn.title = "将当前画布发送给 Pi Agent 处理";
       btn.addEventListener("click", sendToAgent);
-      // 放在 Connected 状态左侧
       controls.insertBefore(btn, status);
     }
+    var sendBtn = document.getElementById(BTN_ID);
 
     if (!document.getElementById(APPROVE_BTN_ID)) {
       var approveBtn = document.createElement("button");
@@ -56,16 +76,24 @@
       approveBtn.style.marginRight = "4px";
       approveBtn.textContent = "Approve";
       approveBtn.addEventListener("click", approveCanvas);
-      // 初始状态：灰色禁用（未 Send 前不可点击）
       approveBtn.disabled = true;
-      approveBtn.style.backgroundColor = "#adb5bd";
-      approveBtn.title = "请先点击 Send to Agent";
-      var sendBtn = document.getElementById(BTN_ID);
-      if (sendBtn) {
-        controls.insertBefore(approveBtn, sendBtn.nextSibling || status);
-      } else {
-        controls.insertBefore(approveBtn, status);
-      }
+      approveBtn.style.display = "none"; // 未 Send 时不显示
+      controls.insertBefore(approveBtn, sendBtn.nextSibling || status);
+    }
+
+    if (!document.getElementById(REJECT_BTN_ID)) {
+      var rejectBtn = document.createElement("button");
+      rejectBtn.id = REJECT_BTN_ID;
+      rejectBtn.className = "btn-secondary";
+      rejectBtn.style.marginRight = "4px";
+      rejectBtn.style.backgroundColor = COLOR_RED;
+      rejectBtn.textContent = "Reject";
+      rejectBtn.title = "回退已发送内容 / 取消执行中任务";
+      rejectBtn.addEventListener("click", rejectCanvas);
+      rejectBtn.disabled = false;
+      rejectBtn.style.display = "none"; // 未 Send 时不显示
+      var approveEl = document.getElementById(APPROVE_BTN_ID);
+      controls.insertBefore(rejectBtn, (approveEl || sendBtn).nextSibling || status);
     }
   }
 
@@ -101,9 +129,9 @@
         return resp.json();
       })
       .then(function () {
-        // 已批准：绿色禁用，等待 Pi 回传结果后轮询恢复灰色
+        // 已批准：绿色禁用，等待 Pi 回传结果后轮询隐藏
         approveBtn.disabled = true;
-        approveBtn.style.backgroundColor = "#28a745";
+        approveBtn.style.backgroundColor = COLOR_GREEN;
         approveBtn.textContent = "✓ 已批准";
         approveBtn.title = "已批准，等待 Pi 执行结果";
       })
@@ -115,17 +143,57 @@
       });
   }
 
+  function rejectCanvas() {
+    var rejectBtn = document.getElementById(REJECT_BTN_ID);
+    setBtn(rejectBtn, "sending", "回退中…", true);
+
+    fetch("/api/elements")
+      .then(function (r) {
+        return r.json().then(function (data) {
+          var arr = Array.isArray(data) ? data : data.elements || [];
+          return { count: arr.length };
+        });
+      })
+      .catch(function () {
+        return { count: -1 };
+      })
+      .then(function (info) {
+        var notifyUrl =
+          location.protocol + "//" + location.hostname + ":" + NOTIFY_PORT + "/reject";
+        return fetch(notifyUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            source: "webui",
+            elements: info.count,
+            rejected_at: new Date().toISOString(),
+          }),
+        });
+      })
+      .then(function (resp) {
+        if (!resp.ok) throw new Error("reject http " + resp.status);
+        return resp.json();
+      })
+      .then(function () {
+        setBtn(rejectBtn, "ok", "✓ 已回退", false);
+        // 立即隐藏 Approve / Reject（pending/approved 已清除），Send 可重新发送
+        setTimeout(function () {
+          show(document.getElementById(APPROVE_BTN_ID), false);
+          show(document.getElementById(REJECT_BTN_ID), false);
+          setBtn(rejectBtn, "idle", "Reject", false);
+        }, 800);
+      })
+      .catch(function () {
+        setBtn(rejectBtn, "error", "回退失败", false);
+        setTimeout(function () {
+          setBtn(rejectBtn, "idle", "Reject", false);
+        }, 2000);
+      });
+  }
+
   function sendToAgent() {
     var btn = document.getElementById(BTN_ID);
     setBtn(btn, "sending", "发送中…", true);
-    // Send 成功后即时反馈：Approve 变黄色可点击（与轮询一致）
-    var approveBtn = document.getElementById(APPROVE_BTN_ID);
-    if (approveBtn) {
-      approveBtn.disabled = false;
-      approveBtn.style.backgroundColor = "#ffb300";
-      approveBtn.textContent = "Approve";
-      approveBtn.title = "请严肃审查画布内容，再点击执行";
-    }
 
     fetch("/api/elements")
       .then(function (r) {
@@ -156,15 +224,29 @@
         return resp.json();
       })
       .then(function () {
-        // 短暂约 1s：绿色背景 + “已发送”，随后恢复蓝色
+        // 短暂约 1s：绿色背景 + "已发送"，随后恢复蓝色
         btn.textContent = "已发送";
-        btn.style.backgroundColor = "#28a745";
+        btn.style.backgroundColor = COLOR_GREEN;
         btn.style.opacity = "1";
         btn.disabled = false;
         setTimeout(function () {
           btn.textContent = "Send to Agent";
-          btn.style.backgroundColor = "#007bff";
+          btn.style.backgroundColor = COLOR_BLUE;
         }, 1000);
+        // Send 成功后：显示 Approve（黄）与 Reject（红）
+        var approveBtn = document.getElementById(APPROVE_BTN_ID);
+        var rejectBtn = document.getElementById(REJECT_BTN_ID);
+        if (approveBtn) {
+          approveBtn.disabled = false;
+          approveBtn.style.backgroundColor = COLOR_YELLOW;
+          approveBtn.textContent = "Approve";
+          approveBtn.title = "请严肃审查画布内容，再点击执行";
+          show(approveBtn, true);
+        }
+        if (rejectBtn) {
+          setBtn(rejectBtn, "idle", "Reject", false);
+          show(rejectBtn, true);
+        }
       })
       .catch(function () {
         setBtn(btn, "error", "通知失败", false);
@@ -184,13 +266,15 @@
   }
   inject();
 
-  // ---- Approve 状态机轮询（3s）----
-  // 灰: 无待处理 / Pi 已回传结果（标记被清除）
-  // 黄: 已 Send 待处理（pending=true, approved=false），可点击
-  // 绿: 已批准（approved=true），禁用，等待 Pi 回传结果
+  // ---- Approve / Reject 状态轮询（3s）----
+  // 未 Send（pending=false, approved=false）: 两按钮隐藏
+  // 待处理（pending=true）                 : Approve 黄 + Reject 红 显示
+  // 已批准（approved=true）                : Approve 绿 + Reject 红 显示
+  // Pi 回传结果（标记清除）                : 两按钮隐藏
   function pollHealth() {
     var approveBtn = document.getElementById(APPROVE_BTN_ID);
-    if (!approveBtn) return;
+    var rejectBtn = document.getElementById(REJECT_BTN_ID);
+    if (!approveBtn && !rejectBtn) return;
     fetch(
       location.protocol + "//" + location.hostname + ":" + NOTIFY_PORT + "/health"
     )
@@ -198,30 +282,43 @@
         return r.json();
       })
       .then(function (h) {
-        updateApproveState(approveBtn, h);
+        updateButtonsState(approveBtn, rejectBtn, h);
       })
       .catch(function () {
         // 通知服务不可达：不改变按钮状态
       });
   }
 
-  function updateApproveState(btn, h) {
+  function updateButtonsState(approveBtn, rejectBtn, h) {
     if (!h) return;
     if (h.approved) {
-      btn.disabled = true;
-      btn.style.backgroundColor = "#28a745";
-      btn.textContent = "✓ 已批准";
-      btn.title = "已批准，等待 Pi 执行结果";
+      if (approveBtn) {
+        approveBtn.disabled = true;
+        approveBtn.style.backgroundColor = COLOR_GREEN;
+        approveBtn.textContent = "✓ 已批准";
+        approveBtn.title = "已批准，等待 Pi 执行结果";
+        show(approveBtn, true);
+      }
+      if (rejectBtn) {
+        setBtn(rejectBtn, "idle", "Reject", false);
+        show(rejectBtn, true);
+      }
     } else if (h.pending) {
-      btn.disabled = false;
-      btn.style.backgroundColor = "#ffb300";
-      btn.textContent = "Approve";
-      btn.title = "请严肃审查画布内容，再点击执行";
+      if (approveBtn) {
+        approveBtn.disabled = false;
+        approveBtn.style.backgroundColor = COLOR_YELLOW;
+        approveBtn.textContent = "Approve";
+        approveBtn.title = "请严肃审查画布内容，再点击执行";
+        show(approveBtn, true);
+      }
+      if (rejectBtn) {
+        setBtn(rejectBtn, "idle", "Reject", false);
+        show(rejectBtn, true);
+      }
     } else {
-      btn.disabled = true;
-      btn.style.backgroundColor = "#adb5bd";
-      btn.textContent = "Approve";
-      btn.title = "请先点击 Send to Agent";
+      // 未 Send 或已回传结果：隐藏两按钮
+      show(approveBtn, false);
+      show(rejectBtn, false);
     }
   }
 

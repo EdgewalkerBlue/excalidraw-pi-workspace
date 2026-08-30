@@ -22,6 +22,7 @@ import path from "node:path";
 const MARKER_DIR = "D:/projects/excalidraw-workspace/.agent";
 const MARKER_FILE = path.join(MARKER_DIR, "pending.json");
 const APPROVED_FILE = path.join(MARKER_DIR, "approved.json");
+const REJECTED_FILE = path.join(MARKER_DIR, "rejected.json");
 const WIDGET_ID = "agent-inbox";
 const POLL_MS = 3000;
 
@@ -48,8 +49,29 @@ export default function (pi: ExtensionAPI) {
   async function checkMarkers(ctx: ExtensionContext) {
     const pending = readJson(MARKER_FILE);
     const approved = readJson(APPROVED_FILE);
+    const rejected = readJson(REJECTED_FILE);
 
-    // 优先显示已批准状态（比待处理更重要）
+    // 1) 拒绝优先：用户点击 Web UI Reject，回退已发送/取消执行中任务
+    if (rejected && rejected.status === "REJECTED") {
+      const key = `rejected:${rejected.rejected_at ?? ""}`;
+      if (key !== lastKey) {
+        ctx.ui.notify("❌ 画布任务已拒绝（Web UI Reject）", "warning");
+        ctx.ui.setWidget(WIDGET_ID, undefined);
+        try {
+          await pi.sendUserMessage(
+            `【Web UI 已拒绝任务】用户点击 Reject（拒绝时间 ${rejected.rejected_at ?? ""}）。` +
+              `请停止当前画布任务，不要执行代码/文件修改，` +
+              `清除 .agent 标记（含 rejected.json）后结束。`
+          );
+          lastKey = key;
+        } catch {
+          lastKey = ""; // 投递失败，下轮重试
+        }
+      }
+      return;
+    }
+
+    // 2) 已批准状态（比待处理更重要）
     if (approved && approved.status === "APPROVED") {
       const key = `approved:${approved.approved_at ?? ""}|${approved.elements ?? ""}`;
       if (key !== lastKey) {

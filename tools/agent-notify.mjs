@@ -22,6 +22,7 @@ const MARKER_DIR =
   process.env.AGENT_MARKER_DIR || path.resolve(__dirname, "..", ".agent");
 const MARKER_FILE = path.join(MARKER_DIR, "pending.json");
 const APPROVED_FILE = path.join(MARKER_DIR, "approved.json");
+const REJECTED_FILE = path.join(MARKER_DIR, "rejected.json");
 
 const server = http.createServer((req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -41,6 +42,7 @@ const server = http.createServer((req, res) => {
         ok: true,
         pending: fs.existsSync(MARKER_FILE),
         approved: fs.existsSync(APPROVED_FILE),
+        rejected: fs.existsSync(REJECTED_FILE),
         marker: MARKER_FILE,
       })
     );
@@ -104,6 +106,49 @@ const server = http.createServer((req, res) => {
       );
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: true, approved: true, marker: APPROVED_FILE }));
+    });
+    return;
+  }
+
+  // Web UI Reject 按钮：清除待处理/已批准标记，写入 rejected.json（回退已发送内容）
+  if (req.method === "POST" && req.url === "/reject") {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      let payload = {};
+      try {
+        payload = JSON.parse(body || "{}");
+      } catch {
+        /* ignore */
+      }
+      const hadPending = fs.existsSync(MARKER_FILE);
+      const hadApproved = fs.existsSync(APPROVED_FILE);
+      fs.mkdirSync(MARKER_DIR, { recursive: true });
+      const pendingSnapshot = hadPending
+        ? JSON.parse(fs.readFileSync(MARKER_FILE, "utf8"))
+        : null;
+      // 回退：清除待处理与已批准标记
+      if (hadPending) fs.unlinkSync(MARKER_FILE);
+      if (hadApproved) fs.unlinkSync(APPROVED_FILE);
+      fs.writeFileSync(
+        REJECTED_FILE,
+        JSON.stringify(
+          {
+            rejected_at: new Date().toISOString(),
+            status: "REJECTED",
+            reverted: { pending: hadPending, approved: hadApproved },
+            pending_snapshot: pendingSnapshot,
+            ...payload,
+          },
+          null,
+          2
+        ),
+        "utf8"
+      );
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({ ok: true, rejected: true, reverted: { pending: hadPending, approved: hadApproved } })
+      );
     });
     return;
   }
