@@ -224,6 +224,15 @@
         return resp.json();
       })
       .then(function () {
+        // 保存画布快照（Reject 时恢复画布用）
+        fetch(
+          location.protocol + "//" + location.hostname + ":" + NOTIFY_PORT + "/snapshot",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ source: "webui" }),
+          }
+        ).catch(function () {});
         // 短暂约 1s：绿色背景 + "已发送"，随后恢复蓝色
         btn.textContent = "已发送";
         btn.style.backgroundColor = COLOR_GREEN;

@@ -60,8 +60,10 @@ export default function (pi: ExtensionAPI) {
         try {
           await pi.sendUserMessage(
             `【Web UI 已拒绝任务】用户点击 Reject（拒绝时间 ${rejected.rejected_at ?? ""}）。` +
-              `请停止当前画布任务，不要执行代码/文件修改，` +
-              `清除 .agent 标记（含 rejected.json）后结束。`
+              `请停止当前画布任务：` +
+              `1) 若已执行文件/代码修改，在项目 D:/projects/excalidraw-workspace 运行 node tools/exec-log.mjs rollback 回滚；` +
+              `2) 清除 .agent 标记（含 rejected.json）；` +
+              `3) 结束后不要继续执行。`
           );
           lastKey = key;
         } catch {
