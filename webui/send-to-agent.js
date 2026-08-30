@@ -54,11 +54,12 @@
       approveBtn.id = APPROVE_BTN_ID;
       approveBtn.className = "btn-secondary";
       approveBtn.style.marginRight = "4px";
-      approveBtn.style.backgroundColor = "#28a745";
       approveBtn.textContent = "Approve";
-      approveBtn.title = "批准当前画布，通知 Pi 执行（与 Pi 内回复 approve 等效）";
       approveBtn.addEventListener("click", approveCanvas);
-      // 放在 Send to Agent 右侧（Connected 左侧）
+      // 初始状态：灰色禁用（未 Send 前不可点击）
+      approveBtn.disabled = true;
+      approveBtn.style.backgroundColor = "#adb5bd";
+      approveBtn.title = "请先点击 Send to Agent";
       var sendBtn = document.getElementById(BTN_ID);
       if (sendBtn) {
         controls.insertBefore(approveBtn, sendBtn.nextSibling || status);
@@ -100,22 +101,31 @@
         return resp.json();
       })
       .then(function () {
-        setBtn(approveBtn, "ok", "✓ 已批准", false);
-        setTimeout(function () {
-          setBtn(approveBtn, "idle", "Approve", false);
-        }, 2500);
+        // 已批准：绿色禁用，等待 Pi 回传结果后轮询恢复灰色
+        approveBtn.disabled = true;
+        approveBtn.style.backgroundColor = "#28a745";
+        approveBtn.textContent = "✓ 已批准";
+        approveBtn.title = "已批准，等待 Pi 执行结果";
       })
       .catch(function () {
         setBtn(approveBtn, "error", "批准失败", false);
         setTimeout(function () {
-          setBtn(approveBtn, "idle", "Approve", false);
-        }, 2500);
+          pollHealth(); // 恢复为实际状态（黄色待处理）
+        }, 2000);
       });
   }
 
   function sendToAgent() {
     var btn = document.getElementById(BTN_ID);
     setBtn(btn, "sending", "发送中…", true);
+    // Send 成功后即时反馈：Approve 变黄色可点击（与轮询一致）
+    var approveBtn = document.getElementById(APPROVE_BTN_ID);
+    if (approveBtn) {
+      approveBtn.disabled = false;
+      approveBtn.style.backgroundColor = "#ffb300";
+      approveBtn.textContent = "Approve";
+      approveBtn.title = "请严肃审查画布内容，再点击执行";
+    }
 
     fetch("/api/elements")
       .then(function (r) {
@@ -168,4 +178,48 @@
     });
   }
   inject();
+
+  // ---- Approve 状态机轮询（3s）----
+  // 灰: 无待处理 / Pi 已回传结果（标记被清除）
+  // 黄: 已 Send 待处理（pending=true, approved=false），可点击
+  // 绿: 已批准（approved=true），禁用，等待 Pi 回传结果
+  function pollHealth() {
+    var approveBtn = document.getElementById(APPROVE_BTN_ID);
+    if (!approveBtn) return;
+    fetch(
+      location.protocol + "//" + location.hostname + ":" + NOTIFY_PORT + "/health"
+    )
+      .then(function (r) {
+        return r.json();
+      })
+      .then(function (h) {
+        updateApproveState(approveBtn, h);
+      })
+      .catch(function () {
+        // 通知服务不可达：不改变按钮状态
+      });
+  }
+
+  function updateApproveState(btn, h) {
+    if (!h) return;
+    if (h.approved) {
+      btn.disabled = true;
+      btn.style.backgroundColor = "#28a745";
+      btn.textContent = "✓ 已批准";
+      btn.title = "已批准，等待 Pi 执行结果";
+    } else if (h.pending) {
+      btn.disabled = false;
+      btn.style.backgroundColor = "#ffb300";
+      btn.textContent = "Approve";
+      btn.title = "请严肃审查画布内容，再点击执行";
+    } else {
+      btn.disabled = true;
+      btn.style.backgroundColor = "#adb5bd";
+      btn.textContent = "Approve";
+      btn.title = "请先点击 Send to Agent";
+    }
+  }
+
+  setInterval(pollHealth, 3000);
+  pollHealth();
 })();
