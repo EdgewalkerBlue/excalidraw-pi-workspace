@@ -41,7 +41,16 @@
 2. 顶部工具栏可见 **Send to Agent** 按钮（Connected 左侧）
 3. 画完内容后点击，按钮显示 ✓ 已发送
 4. 通知服务须运行（start-canvas.bat 已包含 agent-notify，或单独 ）
-5. Pi 检测到标记后走 Review Gate → 处理 → 删除标记
+5. **Pi 侧实时通知**：Pi 扩展 agent-notify-watch 实时监听标记 → TUI 弹出通知 + 顶部收件箱 Widget
+6. Pi 检测到标记后走 Review Gate → 处理 → 删除标记（Widget 自动消失）
+
+## Pi 扩展安装（实时通知）
+
+源码：
+
+
+
+效果：Web UI 点击 Send to Agent → Pi TUI 实时弹出「📮 Send to Agent 收到新画布」通知 + 顶部 Widget 显示元素数/来源/时间；处理完标记自动清除。
 
 ## 服务管理
 
