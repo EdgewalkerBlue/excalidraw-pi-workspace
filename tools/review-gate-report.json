@@ -1,13 +1,13 @@
 {
-  "generated_at": "2026-08-30T06:27:51.995Z",
+  "generated_at": "2026-08-30T06:52:04.924Z",
   "canvas_file": "architecture/main.excalidraw",
   "canvas_stats": {
     "current": {
-      "total": 16,
-      "nodes": 5,
-      "edges": 3,
-      "texts": 8,
-      "bindings": 3
+      "total": 3,
+      "nodes": 0,
+      "edges": 1,
+      "texts": 2,
+      "bindings": 1
     },
     "previous_commit": {
       "total": 16,
@@ -19,21 +19,78 @@
   },
   "changes": {
     "added_nodes": [],
-    "deleted_nodes": [],
+    "deleted_nodes": [
+      {
+        "id": "node-1",
+        "type": "rectangle",
+        "text": "需求分析",
+        "status": null
+      },
+      {
+        "id": "node-2",
+        "type": "rectangle",
+        "text": "系统架构",
+        "status": null
+      },
+      {
+        "id": "node-3",
+        "type": "rectangle",
+        "text": "代码实现",
+        "status": null
+      },
+      {
+        "id": "task-A",
+        "type": "rectangle",
+        "text": "任务A: 实现登录模块\n[DONE]",
+        "status": null
+      },
+      {
+        "id": "pi-done",
+        "type": "ellipse",
+        "text": "Pi 已完成: 登\n录模块\n测试 4/4 通过",
+        "status": null
+      }
+    ],
     "modified_nodes": [],
-    "added_edges": [],
-    "deleted_edges": [],
+    "added_edges": [
+      {
+        "id": "_Uep330DfzQGqBKzGp6wG",
+        "from": "OzaE4GnDa9IN6aSsMN9Pp",
+        "to": "Tccq6eW6h879TejWXlzdV",
+        "label": null
+      }
+    ],
+    "deleted_edges": [
+      {
+        "id": "edge-1",
+        "from": "node-1",
+        "to": "node-2",
+        "label": "输入"
+      },
+      {
+        "id": "edge-2",
+        "from": "node-2",
+        "to": "node-3",
+        "label": "驱动"
+      },
+      {
+        "id": "edge-3",
+        "from": "task-A",
+        "to": "pi-done",
+        "label": "输出"
+      }
+    ],
     "modified_edges": []
   },
   "task": {
-    "scope": "phase_6 路径迁移验证",
+    "scope": "用户画布入库: 新建文件夹 → D：/111",
     "target_project": "D:\\projects\\excalidraw-workspace",
     "target_repo": "(本地仓库，无 remote)",
     "target_branch": "master",
-    "head_commit": "7f83c52"
+    "head_commit": "ab74f16"
   },
-  "planned_actions": "架构画布迁移到 architecture/main.excalidraw",
-  "destructive_operations": false,
+  "planned_actions": "1) 以当前画布(3元素)入库 architecture/main.excalidraw（旧16元素版本进Git历史） 2) commit 3) 确认画布内容是否代表待执行任务",
+  "destructive_operations": true,
   "review_required": true,
   "approval_status": "PENDING"
 }
