@@ -67,6 +67,7 @@ Android 画布(节点+箭头Binding)
 | 无限画布 | Excalidraw 完整功能：无限画布、缩放平移、触摸、手写笔、形状/文本/图片、箭头 |
 | Arrow Binding | 箭头 source/target/binding/label 完整保留（结构化语义） |
 | Android 访问 | `http://<LAN-IP>:5001`，触摸/手写笔优化，PWA 可安装 |
+| 中文界面 | 默认简体中文（与 excalidraw.com 同款官方翻译），底部浮窗可切换 English，右上角 header 文本随语言同步 |
 | Send to Agent | Web UI 按钮：发送画布通知给 Pi（1s 绿色"已发送"反馈） |
 | Approve | Web UI 批准按钮：黄(待处理)→绿(已批准)，未 Send 时不显示，悬停提示严肃审查 |
 | Reject | Web UI 红色拒绝按钮：回退已发送内容 + 恢复画布快照 + 通知 Pi 回滚已执行任务 |
@@ -89,6 +90,7 @@ excalidraw-workspace/
 │   ├── agent-notify.mjs       # 通知服务（:5010，标记文件）
 │   ├── exec-log.mjs           # 任务执行日志与回滚
 │   ├── patch-pwa.mjs          # Web UI PWA + 按钮注入补丁
+│   ├── patch-i18n.mjs         # Web UI 中文默认语言 + 语言切换器补丁
 │   ├── auth-proxy.mjs         # 可选 Basic Auth 代理
 │   └── pi-extensions/
 │       └── agent-notify-watch.ts  # Pi 扩展（实时通知+自动触发+Reject回滚指示）
@@ -133,6 +135,10 @@ start-canvas.bat
 # 或分开启动：
 #   PORT=5001 HOST=0.0.0.0 node node_modules/mcp-excalidraw-server/dist/server.js
 #   node tools/agent-notify.mjs
+
+# 2b. 工作区 UI（可选，独立 Vite 应用，端口 :5002 不占 5001）
+npm run dev        # http://localhost:5002 （修改 src/ 时热更新）
+npm run build && npm run preview   # 生产预览同样在 :5002
 
 # 3. 安装 Pi 扩展（实时通知 + 自动执行）
 copy tools\pi-extensions\agent-notify-watch.ts %USERPROFILE%\.pi\agent\extensions\
@@ -197,6 +203,7 @@ Pi 执行前生成门禁报告：画布统计（节点/箭头/Binding）、增�
 ```bash
 # 启动
 start-canvas.bat                          # canvas server(:5001) + agent-notify(:5010)
+npm run dev                               # 工作区 UI (:5002，与 Canvas Server 端口分离，可同时运行)
 
 # Pi 操作画布（CLI 桥接）
 mcp-cli.bat describe                      # 结构化读取画布（含 Connections/Binding）
@@ -215,6 +222,9 @@ node tools/exec-log.mjs rollback          # 回滚所有记录
 
 # Web UI 补丁（PWA + 按钮）
 node tools/patch-pwa.mjs
+
+# Web UI 补丁（默认中文 + 底部浮窗语言切换；start-canvas.bat 启动时自动执行）
+node tools/patch-i18n.mjs
 ```
 
 ## License

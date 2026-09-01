@@ -1,0 +1,39 @@
+{
+  "任务集": {
+    "名称": "excalidraw-workspace",
+    "创建时间": "2026-09-01",
+    "说明": "Excalidraw × Pi Agent 双向协作工作区（Android 可访问无限画布 + MCP CLI 桥接 + Review Gate）",
+    "任务列表": [
+      {
+        "id": "T-20260901-002",
+        "标题": "P1 修复 WebUI/启动：vite 端口 5001→5002 与 Canvas Server 解冲突；start-canvas.bat 增加端口预检；清理残留进程；引入 @excalidraw/excalidraw/index.css 修复 UI 比例错乱",
+        "路径": "vite.config.ts / package.json / start-canvas.bat / src/main.tsx",
+        "状态": "已完成"
+      },
+      {
+        "id": "T-20260901-006",
+        "标题": "P1 5001 WebUI 全量中文化（默认语言已改为 EN）：默认英文、显式选中文才显示中文；切换后 localStorage 持久化保持；右上角 header + 官方缺失翻译约 60 条全部随语言动态切换；标签页标题双语；底部浮窗语言切换器；patch-i18n.mjs 幂等补丁 + sw 缓存 v6",
+        "路径": "tools/patch-i18n.mjs / webui/send-to-agent.js / start-canvas.bat / tools/patch-pwa.mjs",
+        "状态": "已完成"
+      },
+      {
+        "id": "T-20260901-003",
+        "标题": "P1 防火墙放行 5001 局域网访问（需管理员执行 netsh，Android 才能进入）",
+        "路径": "README.md 防火墙小节",
+        "状态": "待执行"
+      },
+      {
+        "id": "T-20260901-004",
+        "标题": "P2 安装 Pi 扩展 agent-notify-watch.ts 到 ~/.pi/agent/extensions 并 /reload（实时通知+自动触发）",
+        "路径": "tools/pi-extensions/agent-notify-watch.ts",
+        "状态": "待执行"
+      },
+      {
+        "id": "T-20260901-005",
+        "标题": "P2 公网场景启用 Basic Auth 反向代理 tools/auth-proxy.mjs（配合 HTTPS）",
+        "路径": "tools/auth-proxy.mjs / SECURITY.md",
+        "状态": "待执行"
+      }
+    ]
+  }
+}

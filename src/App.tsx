@@ -177,7 +177,7 @@ export default function App() {
         />
       </div>
       <div className="hint-bar">
-        Android 访问：http://192.168.0.1:5001 ｜ 双指缩放平移、手写笔绘图均支持
+        协作画布 http://192.168.0.1:5001（Canvas Server）｜本工作区 :5002 ｜ 双指缩放平移、手写笔绘图均支持
       </div>
     </div>
   );
