@@ -229,4 +229,13 @@ node tools/patch-i18n.mjs
 
 ## License
 
-本项目为演示/协作方案，上游组件遵循各自许可证（Excalidraw MIT、mcp-excalidraw-server MIT、pi-coding-agent 见其仓库）。
+本项目基于 [MIT](LICENSE) 协议开源。
+
+上游组件（均为 MIT）：
+
+- [Excalidraw](https://github.com/excalidraw/excalidraw)（`@excalidraw/excalidraw`）
+- [mcp_excalidraw](https://github.com/yctimlin/mcp_excalidraw)（`mcp-excalidraw-server`）
+- [pi-coding-agent](https://github.com/mariozechner/pi-coding-agent)（`@earendil-works/pi-coding-agent`）
+- React / Vite
+
+> 注：Excalidraw 的 MIT 许可证附带商标条款 —— 未经许可不得将 "Excalidraw" 名称与 Logo 用于推广营销。
