@@ -6,6 +6,10 @@
  *   - Approve       : 批准画布任务（黄色待处理→绿色已批准；未 Send 时不显示）
  *   - Reject        : 回退已发送内容/取消执行中任务（红色；未 Send 时不显示）
  *
+ * 另在 Excalidraw 底部右侧浮窗注入语言切换器（中文 / English），并同步
+ * 右上角 header 文本语言（写入 localStorage["excalidraw-canvas-lang"] 后
+ * 刷新生效；默认英文由 tools/patch-i18n.mjs 注入到 Excalidraw bundle）。
+ *
  * 依赖：tools/agent-notify.mjs（监听 5010）运行中。
  * 状态同步：3s 轮询 /health（pending / approved / rejected）。
  * 幂等：重复注入安全。
@@ -22,6 +26,89 @@
   var COLOR_GREEN = "#28a745";
   var COLOR_YELLOW = "#ffb300";
   var COLOR_RED = "#dc3545";
+
+  // ---- 语言（与底部浮窗语言切换器共用；En=zh 双语文案取英文/中文）----
+  var LANG_KEY = "excalidraw-canvas-lang";
+  var LANG_BTN_ID = "lang-switch-btn";
+  var LANG_MENU_ID = "lang-switch-menu";
+  var LANGS = [
+    { code: "zh-CN", label: "简体中文" },
+    { code: "en", label: "English" },
+  ];
+
+  function getCurrentLang() {
+    try {
+      var c = localStorage.getItem(LANG_KEY);
+      if (c === "en" || c === "zh-CN") return c;
+    } catch (e) {}
+    return "en"; // 默认英文（与 patch-i18n 注入的 bundle 默认值一致）
+  }
+
+  /** 双语文案：当前语言为 English 时返回 en，否则返回 zh */
+  function T(en, zh) {
+    return getCurrentLang() === "en" ? en : zh;
+  }
+
+  function injectLangSwitch() {
+    if (document.getElementById(LANG_BTN_ID)) return;
+    var fr = document.querySelector(".layer-ui__wrapper__footer-right");
+    if (!fr || !fr.firstChild) return;
+    var cur = getCurrentLang();
+
+    var host = document.createElement("div");
+    host.id = LANG_BTN_ID;
+    host.style.cssText =
+      "position:relative;display:inline-flex;align-items:center;margin-right:2px;vertical-align:middle;";
+
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "help-icon";
+    btn.title = "界面语言 / Language";
+    btn.setAttribute("aria-label", "界面语言 / Language");
+    btn.textContent = cur === "zh-CN" ? "中" : "EN";
+    btn.style.cssText = "min-width:34px;font-size:13px;font-weight:600;cursor:pointer;";
+    host.appendChild(btn);
+
+    var menu = document.createElement("div");
+    menu.id = LANG_MENU_ID;
+    menu.style.cssText =
+      "display:none;position:absolute;bottom:44px;right:0;background:#fff;" +
+      "border:1px solid #d0d0d0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.16);" +
+      "z-index:100;min-width:130px;overflow:hidden;padding:4px 0;";
+    LANGS.forEach(function (l) {
+      var item = document.createElement("button");
+      item.type = "button";
+      item.textContent = l.label;
+      item.style.cssText =
+        "display:block;width:100%;padding:9px 16px;border:none;font-size:13px;" +
+        "cursor:pointer;text-align:left;color:#333;background:" +
+        (l.code === cur ? "#eef0ff" : "#fff") + ";";
+      item.addEventListener("mouseenter", function () {
+        item.style.background = "#eef0ff";
+      });
+      item.addEventListener("mouseleave", function () {
+        item.style.background = l.code === cur ? "#eef0ff" : "#fff";
+      });
+      item.addEventListener("click", function () {
+        try {
+          localStorage.setItem(LANG_KEY, l.code);
+        } catch (e) {}
+        location.reload();
+      });
+      menu.appendChild(item);
+    });
+    host.appendChild(menu);
+
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      menu.style.display = menu.style.display === "none" ? "block" : "none";
+    });
+    document.addEventListener("click", function () {
+      menu.style.display = "none";
+    });
+
+    fr.insertBefore(host, fr.firstChild);
+  }
 
   function findStatus() {
     var els = document.querySelectorAll(".controls .status");
@@ -46,6 +133,11 @@
   }
 
   function inject() {
+    // 页面标题随语言切换（index.html 静态 title 由 patch-i18n 设为中文默认）
+    var t = T("Excalidraw Canvas Workspace", "Excalidraw 画布工作区");
+    if (document.title !== t) document.title = t;
+    // 语言切换器（footer 浮窗）优先注入，独立于协作按钮状态
+    injectLangSwitch();
     if (
       document.getElementById(BTN_ID) &&
       document.getElementById(APPROVE_BTN_ID) &&
@@ -62,8 +154,8 @@
       btn.id = BTN_ID;
       btn.className = "btn-primary";
       btn.style.marginRight = "4px";
-      btn.textContent = "Send to Agent";
-      btn.title = "将当前画布发送给 Pi Agent 处理";
+      btn.textContent = T("Send to Agent", "发送给 Agent");
+      btn.title = T("Send canvas to Pi Agent", "将当前画布发送给 Pi Agent 处理");
       btn.addEventListener("click", sendToAgent);
       controls.insertBefore(btn, status);
     }
@@ -74,7 +166,7 @@
       approveBtn.id = APPROVE_BTN_ID;
       approveBtn.className = "btn-secondary";
       approveBtn.style.marginRight = "4px";
-      approveBtn.textContent = "Approve";
+      approveBtn.textContent = T("Approve", "批准");
       approveBtn.addEventListener("click", approveCanvas);
       approveBtn.disabled = true;
       approveBtn.style.display = "none"; // 未 Send 时不显示
@@ -87,8 +179,11 @@
       rejectBtn.className = "btn-secondary";
       rejectBtn.style.marginRight = "4px";
       rejectBtn.style.backgroundColor = COLOR_RED;
-      rejectBtn.textContent = "Reject";
-      rejectBtn.title = "回退已发送内容 / 取消执行中任务";
+      rejectBtn.textContent = T("Reject", "拒绝");
+      rejectBtn.title = T(
+        "Revert sent content / cancel running task",
+        "回退已发送内容 / 取消执行中任务"
+      );
       rejectBtn.addEventListener("click", rejectCanvas);
       rejectBtn.disabled = false;
       rejectBtn.style.display = "none"; // 未 Send 时不显示
@@ -99,7 +194,7 @@
 
   function approveCanvas() {
     var approveBtn = document.getElementById(APPROVE_BTN_ID);
-    setBtn(approveBtn, "sending", "批准中…", true);
+    setBtn(approveBtn, "sending", T("Approving...", "批准中…"), true);
 
     fetch("/api/elements")
       .then(function (r) {
@@ -132,11 +227,11 @@
         // 已批准：绿色禁用，等待 Pi 回传结果后轮询隐藏
         approveBtn.disabled = true;
         approveBtn.style.backgroundColor = COLOR_GREEN;
-        approveBtn.textContent = "✓ 已批准";
-        approveBtn.title = "已批准，等待 Pi 执行结果";
+        approveBtn.textContent = T("✓ Approved", "✓ 已批准");
+        approveBtn.title = T("Approved, waiting for Pi result", "已批准，等待 Pi 执行结果");
       })
       .catch(function () {
-        setBtn(approveBtn, "error", "批准失败", false);
+        setBtn(approveBtn, "error", T("Approve failed", "批准失败"), false);
         setTimeout(function () {
           pollHealth(); // 恢复为实际状态（黄色待处理）
         }, 2000);
@@ -145,7 +240,7 @@
 
   function rejectCanvas() {
     var rejectBtn = document.getElementById(REJECT_BTN_ID);
-    setBtn(rejectBtn, "sending", "回退中…", true);
+    setBtn(rejectBtn, "sending", T("Reverting...", "回退中…"), true);
 
     fetch("/api/elements")
       .then(function (r) {
@@ -175,25 +270,25 @@
         return resp.json();
       })
       .then(function () {
-        setBtn(rejectBtn, "ok", "✓ 已回退", false);
+        setBtn(rejectBtn, "ok", T("✓ Reverted", "✓ 已回退"), false);
         // 立即隐藏 Approve / Reject（pending/approved 已清除），Send 可重新发送
         setTimeout(function () {
           show(document.getElementById(APPROVE_BTN_ID), false);
           show(document.getElementById(REJECT_BTN_ID), false);
-          setBtn(rejectBtn, "idle", "Reject", false);
+          setBtn(rejectBtn, "idle", T("Reject", "拒绝"), false);
         }, 800);
       })
       .catch(function () {
-        setBtn(rejectBtn, "error", "回退失败", false);
+        setBtn(rejectBtn, "error", T("Revert failed", "回退失败"), false);
         setTimeout(function () {
-          setBtn(rejectBtn, "idle", "Reject", false);
+          setBtn(rejectBtn, "idle", T("Reject", "拒绝"), false);
         }, 2000);
       });
   }
 
   function sendToAgent() {
     var btn = document.getElementById(BTN_ID);
-    setBtn(btn, "sending", "发送中…", true);
+    setBtn(btn, "sending", T("Sending...", "发送中…"), true);
 
     fetch("/api/elements")
       .then(function (r) {
@@ -234,12 +329,12 @@
           }
         ).catch(function () {});
         // 短暂约 1s：绿色背景 + "已发送"，随后恢复蓝色
-        btn.textContent = "已发送";
+        btn.textContent = T("Sent ✓", "已发送");
         btn.style.backgroundColor = COLOR_GREEN;
         btn.style.opacity = "1";
         btn.disabled = false;
         setTimeout(function () {
-          btn.textContent = "Send to Agent";
+          btn.textContent = T("Send to Agent", "发送给 Agent");
           btn.style.backgroundColor = COLOR_BLUE;
         }, 1000);
         // Send 成功后：显示 Approve（黄）与 Reject（红）
@@ -248,19 +343,22 @@
         if (approveBtn) {
           approveBtn.disabled = false;
           approveBtn.style.backgroundColor = COLOR_YELLOW;
-          approveBtn.textContent = "Approve";
-          approveBtn.title = "请严肃审查画布内容，再点击执行";
+          approveBtn.textContent = T("Approve", "批准");
+          approveBtn.title = T(
+            "Review the canvas carefully before executing",
+            "请严肃审查画布内容，再点击执行"
+          );
           show(approveBtn, true);
         }
         if (rejectBtn) {
-          setBtn(rejectBtn, "idle", "Reject", false);
+          setBtn(rejectBtn, "idle", T("Reject", "拒绝"), false);
           show(rejectBtn, true);
         }
       })
       .catch(function () {
-        setBtn(btn, "error", "通知失败", false);
+        setBtn(btn, "error", T("Notify failed", "通知失败"), false);
         setTimeout(function () {
-          setBtn(btn, "idle", "Send to Agent", false);
+          setBtn(btn, "idle", T("Send to Agent", "发送给 Agent"), false);
         }, 2500);
       });
   }
@@ -304,24 +402,27 @@
       if (approveBtn) {
         approveBtn.disabled = true;
         approveBtn.style.backgroundColor = COLOR_GREEN;
-        approveBtn.textContent = "✓ 已批准";
-        approveBtn.title = "已批准，等待 Pi 执行结果";
+        approveBtn.textContent = T("✓ Approved", "✓ 已批准");
+        approveBtn.title = T("Approved, waiting for Pi result", "已批准，等待 Pi 执行结果");
         show(approveBtn, true);
       }
       if (rejectBtn) {
-        setBtn(rejectBtn, "idle", "Reject", false);
+        setBtn(rejectBtn, "idle", T("Reject", "拒绝"), false);
         show(rejectBtn, true);
       }
     } else if (h.pending) {
       if (approveBtn) {
         approveBtn.disabled = false;
         approveBtn.style.backgroundColor = COLOR_YELLOW;
-        approveBtn.textContent = "Approve";
-        approveBtn.title = "请严肃审查画布内容，再点击执行";
+        approveBtn.textContent = T("Approve", "批准");
+        approveBtn.title = T(
+          "Review the canvas carefully before executing",
+          "请严肃审查画布内容，再点击执行"
+        );
         show(approveBtn, true);
       }
       if (rejectBtn) {
-        setBtn(rejectBtn, "idle", "Reject", false);
+        setBtn(rejectBtn, "idle", T("Reject", "拒绝"), false);
         show(rejectBtn, true);
       }
     } else {

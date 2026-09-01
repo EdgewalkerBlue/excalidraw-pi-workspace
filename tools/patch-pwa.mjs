@@ -153,7 +153,7 @@ fs.writeFileSync(
 fs.writeFileSync(
   out("sw.js"),
   `// Excalidraw 工作区 Service Worker（PWA 离线缓存）
-const CACHE = "excalidraw-workspace-v2";
+const CACHE = "excalidraw-workspace-v4";
 const APP_SHELL = ["./", "./index.html", "./manifest.json", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", (e) => {
