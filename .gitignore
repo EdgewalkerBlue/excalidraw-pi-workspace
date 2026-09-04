@@ -4,4 +4,5 @@ dist/
 *.tsbuildinfo
 .DS_Store
 .agent/
-.pi/session-backup/
+.pi/*
+!.pi/task_set.json

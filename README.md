@@ -69,6 +69,8 @@ Android 画布(节点+箭头Binding)
 | Android 访问 | `http://<LAN-IP>:5001`，触摸/手写笔优化，PWA 可安装 |
 | 中文界面 | 默认简体中文（与 excalidraw.com 同款官方翻译），底部浮窗可切换 English，右上角 header 文本随语言同步 |
 | Send to Agent | Web UI 按钮：发送画布通知给 Pi（1s 绿色"已发送"反馈） |
+| Send to Task Set | Web UI 按钮（Send to Agent 左侧）：将画布中各 frame 的未完成任务写入对应项目 `.pi/task_set.json`（幂等去重、P 级排序） |
+| Frame 边框色 | Web UI 色板（6 色）：一键更新所有 frame 边框色；新建 frame 默认蓝色（深色主题下清晰可见） |
 | Approve | Web UI 批准按钮：黄(待处理)→绿(已批准)，未 Send 时不显示，悬停提示严肃审查 |
 | Reject | Web UI 红色拒绝按钮：回退已发送内容 + 恢复画布快照 + 通知 Pi 回滚已执行任务 |
 | Pi 实时通知 | Pi 扩展实时监听标记，TUI 弹出通知 + 收件箱 Widget，自动触发 agent 执行 |
@@ -90,7 +92,8 @@ excalidraw-workspace/
 │   ├── agent-notify.mjs       # 通知服务（:5010，标记文件）
 │   ├── exec-log.mjs           # 任务执行日志与回滚
 │   ├── patch-pwa.mjs          # Web UI PWA + 按钮注入补丁
-│   ├── patch-i18n.mjs         # Web UI 中文默认语言 + 语言切换器补丁
+│   ├── patch-i18n.mjs         # Web UI 默认语言/双语/翻译补齐补丁
+│   ├── patch-server.mjs       # Canvas server 落盘备份轮转补丁（防误覆盖）
 │   ├── auth-proxy.mjs         # 可选 Basic Auth 代理
 │   └── pi-extensions/
 │       └── agent-notify-watch.ts  # Pi 扩展（实时通知+自动触发+Reject回滚指示）
@@ -160,6 +163,12 @@ netsh advfirewall firewall add rule name="Excalidraw Workspace 5001" dir=in acti
 ```
 
 ## 协作流程
+
+### Send to Task Set（画布任务 → 项目任务集）
+
+1. 在画布上用 **frame tool（框架）** 框定各项目区域，**frame 名 = 项目名**（如 `excalidraw-workspace`，映射到 `<项目根>/.pi/task_set.json`；也支持绝对路径）
+2. frame 内添加文本任务：行首 `P0`~`P3` 为优先级（默认 P2）；行首 `✓`/`已完成` 表示完成（自动跳过）
+3. 点击 **Send to Task Set**（发送到任务集）：各 frame 的未完成任务写入对应项目的 `.pi/task_set.json` —— 标题去重（幂等）、生成 `T-日期-序号` id、状态"待执行"、P 级稳定排序
 
 ### Send to Agent
 

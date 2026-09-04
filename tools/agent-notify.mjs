@@ -52,6 +52,143 @@ async function fetchCanvasElements() {
   return Array.isArray(data) ? data : data.elements || [];
 }
 
+// ---- Send to Task Set：画布 frame → 各项目 .pi/task_set.json ----
+const PROJECTS_ROOT = process.env.CANVAS_PROJECTS_ROOT || "D:\\projects";
+const DONE_PREFIX_RE = /^\s*(?:✓|✔|\[x\]|已完成)/i;
+const PRIORITY_RE = /^\s*(P[0-3])\s*[:：、.，-]?\s*/i;
+
+/** frame.name → 项目根路径：绝对路径直接用，否则 <PROJECTS_ROOT>/<name> */
+function resolveProjectPath(name) {
+  const raw = String(name || "").trim();
+  if (!raw) return null;
+  if (/^[A-Za-z]:[\\/]/.test(raw) || /^[\\/]/.test(raw)) return path.normalize(raw);
+  return path.join(PROJECTS_ROOT, raw);
+}
+
+/** 单行任务解析：✓/已完成 开头 → 跳过；P0-P3 前缀 → 优先级，默认 P2 */
+function parseTaskLine(line) {
+  let text = String(line || "").trim();
+  if (!text) return null;
+  if (DONE_PREFIX_RE.test(text)) return { done: true };
+  let priority = "P2";
+  const m = text.match(PRIORITY_RE);
+  if (m) {
+    priority = m[1].toUpperCase();
+    text = text.slice(m[0].length).trim();
+  }
+  if (!text) return null;
+  return { done: false, priority, title: text };
+}
+
+/** 生成任务 id：T-YYYYMMDD-NNN（按现有最大序号递增） */
+function nextTaskId(existing) {
+  const now = new Date();
+  const ymd =
+    String(now.getFullYear()) +
+    String(now.getMonth() + 1).padStart(2, "0") +
+    String(now.getDate()).padStart(2, "0");
+  let max = 0;
+  for (const t of existing) {
+    const m = String(t.id || "").match(/^T-\d{8}-(\d+)$/);
+    if (m) max = Math.max(max, parseInt(m[1], 10));
+  }
+  return `T-${ymd}-${String(max + 1).padStart(3, "0")}`;
+}
+
+/** 合并写入项目 task_set.json：标题去重（幂等）、P 级稳定排序、状态"待执行" */
+function mergeTaskSet(file, projectDirName, incoming) {
+  let doc;
+  if (fs.existsSync(file)) {
+    doc = JSON.parse(fs.readFileSync(file, "utf8"));
+  } else {
+    doc = {
+      任务集: {
+        名称: projectDirName,
+        创建时间: new Date().toISOString().slice(0, 10),
+        说明: "来自画布 Send to Task Set",
+        任务列表: [],
+      },
+    };
+  }
+  const ts = (doc["任务集"] = doc["任务集"] || {});
+  ts.名称 = ts.名称 || projectDirName;
+  ts.创建时间 = ts.创建时间 || new Date().toISOString().slice(0, 10);
+  ts.任务列表 = Array.isArray(ts.任务列表) ? ts.任务列表 : [];
+
+  const existTitles = new Set(
+    ts.任务列表.map((t) => String(t.标题 || "").replace(/^P[0-3]\s*/, "").trim())
+  );
+  let added = 0;
+  let skipped = 0;
+  for (const it of incoming) {
+    if (existTitles.has(it.title)) {
+      skipped++;
+      continue;
+    }
+    existTitles.add(it.title);
+    ts.任务列表.push({
+      id: nextTaskId(ts.任务列表),
+      标题: `${it.priority} ${it.title}`,
+      路径: "",
+      状态: "待执行",
+    });
+    added++;
+  }
+
+  // P0 > P1 > P2 > P3 稳定排序（JS sort 为稳定排序，同级保持原序）
+  const priOf = (t) => {
+    const m = String(t.标题 || "").match(/^P([0-3])/);
+    return m ? parseInt(m[1], 10) : 2;
+  };
+  ts.任务列表.sort((a, b) => priOf(a) - priOf(b));
+
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(doc, null, 2), "utf8");
+  return { added, skipped };
+}
+
+/** 解析画布 frame 分组并写入各项目任务集 */
+async function handleTaskSet() {
+  const elements = await fetchCanvasElements();
+  const frames = elements.filter((e) => e.type === "frame");
+  const projects = [];
+  for (const f of frames) {
+    const name = String(f.name || "").trim() || f.id;
+    const projectPath = resolveProjectPath(name);
+    const r = { frame: name, path: projectPath, added: 0, skipped: 0, error: null };
+    try {
+      if (!projectPath || !fs.existsSync(projectPath) || !fs.statSync(projectPath).isDirectory()) {
+        throw new Error(`项目目录不存在: ${projectPath}`);
+      }
+      // frame 内未绑定的 text 元素 → 逐行任务
+      const texts = elements.filter(
+        (e) => e.frameId === f.id && e.type === "text" && !e.containerId
+      );
+      const incoming = [];
+      for (const t of texts) {
+        for (const line of String(t.text || "").split(/\r?\n/)) {
+          const task = parseTaskLine(line);
+          if (task && !task.done) incoming.push(task);
+        }
+      }
+      if (incoming.length === 0) {
+        r.note = "no-tasks";
+        projects.push(r);
+        continue;
+      }
+      const file = path.join(projectPath, ".pi", "task_set.json");
+      const { added, skipped } = mergeTaskSet(file, path.basename(projectPath), incoming);
+      r.added = added;
+      r.skipped = skipped;
+      r.file = file;
+    } catch (e) {
+      r.error = e.message;
+    }
+    projects.push(r);
+  }
+  return { projects };
+}
+
 /** 恢复画布快照（清空后批量重建） */
 async function restoreCanvasSnapshot() {
   if (!fs.existsSync(SNAPSHOT_FILE)) {
@@ -225,6 +362,18 @@ const server = http.createServer(async (req, res) => {
         reverted: { pending: hadPending, approved: hadApproved },
         canvas_restore: restore,
       });
+      return;
+    }
+
+    // Send to Task Set：画布 frame → 各项目 .pi/task_set.json
+    if (req.method === "POST" && req.url === "/task-set") {
+      try {
+        const { projects } = await handleTaskSet();
+        const ok = projects.every((p) => !p.error);
+        json(res, 200, { ok, projects });
+      } catch (e) {
+        json(res, 500, { ok: false, error: e.message });
+      }
       return;
     }
 
