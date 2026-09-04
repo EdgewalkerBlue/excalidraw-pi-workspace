@@ -5,6 +5,12 @@
     "说明": "Excalidraw × Pi Agent 双向协作工作区（Android 可访问无限画布 + MCP CLI 桥接 + Review Gate）",
     "任务列表": [
       {
+        "id": "T-20260904-001",
+        "标题": "P1 Frame 边框色功能：色板一键改色（6色）+ 新建 frame 自动默认蓝 #1971c2（深色主题可见）；canvas 落盘备份轮转（patch-server.mjs，20 份，防误覆盖）",
+        "路径": "webui/send-to-agent.js / tools/patch-server.mjs",
+        "状态": "已完成"
+      },
+      {
         "id": "T-20260901-003",
         "标题": "P1 防火墙放行 5001 局域网访问（需管理员执行 netsh，Android 才能进入）",
         "路径": "README.md 防火墙小节",
