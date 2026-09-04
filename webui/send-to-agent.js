@@ -20,6 +20,7 @@
   var BTN_ID = "send-to-agent-btn";
   var APPROVE_BTN_ID = "approve-btn";
   var REJECT_BTN_ID = "reject-btn";
+  var TASKSET_BTN_ID = "send-to-taskset-btn";
   var NOTIFY_PORT = 5010;
 
   var COLOR_BLUE = "#007bff";
@@ -161,6 +162,22 @@
     }
     var sendBtn = document.getElementById(BTN_ID);
 
+    if (!document.getElementById(TASKSET_BTN_ID)) {
+      // Send to Task Set：在 Send to Agent 左侧
+      var tsBtn = document.createElement("button");
+      tsBtn.id = TASKSET_BTN_ID;
+      tsBtn.className = "btn-secondary";
+      tsBtn.style.marginRight = "4px";
+      tsBtn.style.backgroundColor = "#8b5cf6";
+      tsBtn.textContent = T("Send to Task Set", "发送到任务集");
+      tsBtn.title = T(
+        "Write unfinished canvas tasks (grouped by frame) into each project's task_set.json",
+        "将画布中各 frame 的未完成任务写入对应项目的 task_set.json（frame 名=项目名或绝对路径；行首 P0-P3 为优先级，✓/已完成 开头跳过）"
+      );
+      tsBtn.addEventListener("click", sendToTaskSet);
+      controls.insertBefore(tsBtn, sendBtn);
+    }
+
     if (!document.getElementById(APPROVE_BTN_ID)) {
       var approveBtn = document.createElement("button");
       approveBtn.id = APPROVE_BTN_ID;
@@ -283,6 +300,54 @@
         setTimeout(function () {
           setBtn(rejectBtn, "idle", T("Reject", "拒绝"), false);
         }, 2000);
+      });
+  }
+
+  function sendToTaskSet() {
+    var btn = document.getElementById(TASKSET_BTN_ID);
+    if (!btn) return;
+    setBtn(btn, "sending", T("Writing...", "写入中…"), true);
+    var notifyUrl =
+      location.protocol + "//" + location.hostname + ":" + NOTIFY_PORT + "/task-set";
+    fetch(notifyUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    })
+      .then(function (r) {
+        return r.json();
+      })
+      .then(function (data) {
+        var ps = data.projects || [];
+        var added = ps.reduce(function (s, p) { return s + (p.added || 0); }, 0);
+        var errs = ps.filter(function (p) { return p.error; });
+        if (errs.length && added === 0) {
+          throw new Error(errs.map(function (p) { return p.frame + ": " + p.error; }).join("； "));
+        }
+        var ok = added > 0
+          ? T("✓ Written " + added, "✓ 已写入 " + added + " 项")
+          : T("✓ No new tasks", "✓ 无新增任务");
+        btn.textContent = ok;
+        btn.style.backgroundColor = COLOR_GREEN;
+        btn.style.opacity = "1";
+        btn.disabled = false;
+        btn.title = ps
+          .map(function (p) {
+            return p.frame + " → +" + (p.added || 0) + (p.skipped ? " (跳过" + p.skipped + ")" : "") + (p.error ? " [" + p.error + "]" : "");
+          })
+          .join("\n") || T("No frames on canvas", "画布上没有 frame");
+        setTimeout(function () {
+          setBtn(btn, "idle", T("Send to Task Set", "发送到任务集"), false);
+          btn.style.backgroundColor = "#8b5cf6";
+        }, 3000);
+      })
+      .catch(function (e) {
+        setBtn(btn, "error", T("Write failed", "写入失败"), false);
+        btn.title = e && e.message ? e.message : "";
+        setTimeout(function () {
+          setBtn(btn, "idle", T("Send to Task Set", "发送到任务集"), false);
+          btn.style.backgroundColor = "#8b5cf6";
+        }, 3000);
       });
   }
 
