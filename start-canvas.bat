@@ -23,10 +23,15 @@ if not errorlevel 1 (
   exit /b 1
 )
 
-rem ---- 1) i18n 补丁（默认中文 + 语言切换器同步；幂等）----
+rem ---- 1) i18n 补丁（默认英文+中文切换；幂等）----
 node tools\patch-i18n.mjs
 if errorlevel 1 (
-  echo [警告] i18n 补丁执行失败，界面可能不是中文（可手动运行: node tools\patch-i18n.mjs）
+  echo [警告] i18n 补丁执行失败（可手动运行: node tools\patch-i18n.mjs）
+)
+rem ---- 1b) canvas server 备份轮转补丁（防误覆盖丢画布；幂等）----
+node tools\patch-server.mjs
+if errorlevel 1 (
+  echo [警告] server 补丁执行失败（可手动运行: node tools\patch-server.mjs）
 )
 
 rem ---- 2) Agent 通知服务（后台，5010；已运行则跳过）----

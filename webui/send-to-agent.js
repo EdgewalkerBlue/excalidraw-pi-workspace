@@ -21,7 +21,22 @@
   var APPROVE_BTN_ID = "approve-btn";
   var REJECT_BTN_ID = "reject-btn";
   var TASKSET_BTN_ID = "send-to-taskset-btn";
+  var FRAME_COLOR_BTN_ID = "frame-color-btn";
+  var FRAME_COLOR_MENU_ID = "frame-color-menu";
   var NOTIFY_PORT = 5010;
+
+  // frame 边框色：默认蓝（深/浅色主题下都清晰可见）
+  var FRAME_DEFAULT_BLUE = "#1971c2";
+  // 视为"默认色"（自动改蓝）的 strokeColor；新建 frame 默认 #1e1e1e，深色主题下看不清
+  var FRAME_AUTO_FROM = ["#1e1e1e", "#000000", ""];
+  var FRAME_PALETTE = [
+    { c: "#1971c2", name: "蓝" },
+    { c: "#2f9e44", name: "绿" },
+    { c: "#f08c00", name: "橙" },
+    { c: "#e03131", name: "红" },
+    { c: "#9c36b5", name: "紫" },
+    { c: "#ced4da", name: "灰白" },
+  ];
 
   var COLOR_BLUE = "#007bff";
   var COLOR_GREEN = "#28a745";
@@ -162,6 +177,10 @@
     }
     var sendBtn = document.getElementById(BTN_ID);
 
+    if (!document.getElementById(FRAME_COLOR_BTN_ID)) {
+      injectFrameColor(controls);
+    }
+
     if (!document.getElementById(TASKSET_BTN_ID)) {
       // Send to Task Set：在 Send to Agent 左侧
       var tsBtn = document.createElement("button");
@@ -301,6 +320,120 @@
           setBtn(rejectBtn, "idle", T("Reject", "拒绝"), false);
         }, 2000);
       });
+  }
+
+  // ---- Frame 边框色：色板改色 + 新 frame 自动默认蓝 ----
+  function apiElements() {
+    return fetch("/api/elements")
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        return Array.isArray(data) ? data : data.elements || [];
+      });
+  }
+
+  function putFrameColor(id, color) {
+    // 注意：不能传 type:"frame"（UpdateElementSchema 的 type 枚举不含 frame，会被 400 拒绝），
+    // 只传 strokeColor；element_updated 广播会让浏览器实时变色
+    return fetch("/api/elements/" + encodeURIComponent(id), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ strokeColor: color }),
+    }).then(function (r) {
+      if (!r.ok) throw new Error("update " + r.status);
+      return r.json();
+    });
+  }
+
+  /** 更新画布上所有 frame 的边框色（server 广播 element_updated，浏览器实时生效） */
+  function setFrameColor(color) {
+    return apiElements()
+      .then(function (els) {
+        var frames = els.filter(function (e) { return e.type === "frame"; });
+        if (!frames.length) return { count: 0 };
+        return Promise.all(
+          frames.map(function (f) { return putFrameColor(f.id, color); })
+        ).then(function () { return { count: frames.length }; });
+      });
+  }
+
+  /** 轮询：新建 frame 为默认黑色时自动改蓝（用户改过的其他颜色不动） */
+  function autoFixFrameColors() {
+    apiElements()
+      .then(function (els) {
+        els
+          .filter(function (e) {
+            return (
+              e.type === "frame" &&
+              FRAME_AUTO_FROM.indexOf(String(e.strokeColor || "").toLowerCase()) !== -1
+            );
+          })
+          .forEach(function (f) {
+            putFrameColor(f.id, FRAME_DEFAULT_BLUE).catch(function () {});
+          });
+      })
+      .catch(function () {});
+  }
+
+  function injectFrameColor(controls) {
+    var host = document.createElement("div");
+    host.id = FRAME_COLOR_BTN_ID;
+    host.style.cssText = "position:relative;display:inline-flex;align-items:center;margin-right:4px;";
+
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn-secondary";
+    btn.textContent = T("Frame color", "Frame 边框色");
+    btn.title = T(
+      "Set border color for all frames on canvas. New frames default to blue.",
+      "设置画布上所有 frame 的边框色；新建 frame 自动为蓝色"
+    );
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      menu.style.display = menu.style.display === "none" ? "block" : "none";
+    });
+    host.appendChild(btn);
+
+    var menu = document.createElement("div");
+    menu.id = FRAME_COLOR_MENU_ID;
+    menu.style.cssText =
+      "display:none;position:absolute;top:40px;left:0;background:#fff;" +
+      "border:1px solid #d0d0d0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.16);" +
+      "z-index:100;padding:8px;display:flex;gap:8px;";
+    FRAME_PALETTE.forEach(function (p) {
+      var sw = document.createElement("button");
+      sw.type = "button";
+      sw.title = p.name + " " + p.c;
+      sw.style.cssText =
+        "width:24px;height:24px;border-radius:6px;cursor:pointer;border:2px solid #fff;" +
+        "box-shadow:0 0 0 1px #ccc;background:" + p.c + ";";
+      sw.addEventListener("click", function () {
+        menu.style.display = "none";
+        btn.textContent = T("Applying...", "应用中…");
+        setFrameColor(p.c)
+          .then(function (res) {
+            btn.textContent =
+              res.count > 0
+                ? T("✓ " + res.count + " frame(s)", "✓ 已更新 " + res.count + " 个")
+                : T("No frames", "画布上没有 frame");
+            setTimeout(function () {
+              btn.textContent = T("Frame color", "Frame 边框色");
+            }, 2000);
+          })
+          .catch(function () {
+            btn.textContent = T("Failed", "失败");
+            setTimeout(function () {
+              btn.textContent = T("Frame color", "Frame 边框色");
+            }, 2000);
+          });
+      });
+      menu.appendChild(sw);
+    });
+    host.appendChild(menu);
+    document.addEventListener("click", function () {
+      menu.style.display = "none";
+    });
+
+    controls.insertBefore(host, controls.firstChild);
   }
 
   function sendToTaskSet() {
@@ -499,4 +632,6 @@
 
   setInterval(pollHealth, 3000);
   pollHealth();
+  setInterval(autoFixFrameColors, 3000);
+  autoFixFrameColors();
 })();
