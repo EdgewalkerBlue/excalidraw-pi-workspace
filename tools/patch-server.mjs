@@ -101,8 +101,8 @@ const SYNC_NEW = `        // ── pi-sync-guard v1: 合并/保护（防覆盖/
         const _lastGood = Number(elements._piLastGoodSyncAt || 0);
         const _elUpdated = (el) => { const v = Number(el && el.updated); return Number.isFinite(v) ? v : 0; };
 
-        // a) 空 sync 保护：server 非空且距上次有效 sync <60s → 拒绝（防新开空页面/旧空场景清空画布）
-        if (frontendElements.length === 0 && beforeCount > 0 && _nowMs - _lastGood < 60000) {
+        // a) 空 sync 保护：server 非空时始终拒绝空场景 sync（显式清空请走页面"清除画布"按钮 / DELETE /api/elements/clear）
+        if (frontendElements.length === 0 && beforeCount > 0) {
             logger.warn('[sync-guard] empty sync rejected (protect last good scene)');
             return res.status(409).json({
                 success: false,
