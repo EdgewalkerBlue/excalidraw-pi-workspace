@@ -6,3 +6,4 @@ dist/
 .agent/
 .pi/*
 !.pi/task_set.json
+.auth.env

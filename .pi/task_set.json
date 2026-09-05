@@ -18,9 +18,9 @@
       },
       {
         "id": "T-20260901-005",
-        "标题": "P2 公网场景启用 Basic Auth 反向代理 tools/auth-proxy.mjs（配合 HTTPS）",
-        "路径": "tools/auth-proxy.mjs / SECURITY.md",
-        "状态": "待执行"
+        "标题": "P2 公网认证模式：auth-proxy 强化（默认端口 5002→5003 避 vite、弱密码禁启动、.auth.env 自动加载）+ start-auth.bat 一键启动（随机强密码/canvas 绑 127.0.0.1/代理 5003）+ SECURITY/README 更新；已验证 401/200/API/WS 转发",
+        "路径": "tools/auth-proxy.mjs / start-auth.bat / SECURITY.md / README.md",
+        "状态": "已完成"
       }
     ]
   }

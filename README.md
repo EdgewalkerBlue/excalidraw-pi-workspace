@@ -139,6 +139,9 @@ start-canvas.bat
 #   PORT=5001 HOST=0.0.0.0 node node_modules/mcp-excalidraw-server/dist/server.js
 #   node tools/agent-notify.mjs
 
+# 2a. 公网/不可信网络：认证模式（canvas 绑 127.0.0.1，Basic Auth 代理 :5003）
+start-auth.bat          # 首次运行自动生成随机强密码 .auth.env（已 gitignore）
+
 # 2b. 工作区 UI（可选，独立 Vite 应用，端口 :5002 不占 5001）
 npm run dev        # http://localhost:5002 （修改 src/ 时热更新）
 npm run build && npm run preview   # 生产预览同样在 :5002
