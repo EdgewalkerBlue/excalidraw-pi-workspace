@@ -55,7 +55,7 @@ async function fetchCanvasElements() {
 // ---- Send to Task Set：画布 frame → 各项目 .pi/task_set.json ----
 const PROJECTS_ROOT = process.env.CANVAS_PROJECTS_ROOT || "D:\\projects";
 const DONE_PREFIX_RE = /^\s*(?:✓|✔|\[x\]|已完成)/i;
-const PRIORITY_RE = /^\s*(P[0-3])\s*[:：、.，-]?\s*/i;
+const PRIORITY_RE = /^s*(?:【?P([0-4])】?)s*[:：、.，-]?s*/i;
 
 /** frame.name → 项目根路径：绝对路径直接用，否则 <PROJECTS_ROOT>/<name> */
 function resolveProjectPath(name) {
@@ -73,7 +73,7 @@ function parseTaskLine(line) {
   let priority = "P2";
   const m = text.match(PRIORITY_RE);
   if (m) {
-    priority = m[1].toUpperCase();
+    priority = "P" + m[1];
     text = text.slice(m[0].length).trim();
   }
   if (!text) return null;
@@ -114,6 +114,10 @@ function mergeTaskSet(file, projectDirName, incoming) {
   ts.名称 = ts.名称 || projectDirName;
   ts.创建时间 = ts.创建时间 || new Date().toISOString().slice(0, 10);
   ts.任务列表 = Array.isArray(ts.任务列表) ? ts.任务列表 : [];
+  // 约定：任务集只保留未完成项 —— 自动剔除状态为"已完成"的历史任务
+  const removed = ts.任务列表.length;
+  ts.任务列表 = ts.任务列表.filter((t) => String(t.状态 || "") !== "已完成");
+  const removedCount = removed - ts.任务列表.length;
 
   const existTitles = new Set(
     ts.任务列表.map((t) => String(t.标题 || "").replace(/^P[0-3]\s*/, "").trim())
@@ -137,49 +141,81 @@ function mergeTaskSet(file, projectDirName, incoming) {
 
   // P0 > P1 > P2 > P3 稳定排序（JS sort 为稳定排序，同级保持原序）
   const priOf = (t) => {
-    const m = String(t.标题 || "").match(/^P([0-3])/);
-    return m ? parseInt(m[1], 10) : 2;
+    const m = String(t.标题 || "").match(/^(?:P([0-4])|【P([0-4])】)/);
+    return m ? parseInt(m[1] || m[2], 10) : 2;
   };
   ts.任务列表.sort((a, b) => priOf(a) - priOf(b));
 
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, JSON.stringify(doc, null, 2), "utf8");
-  return { added, skipped };
+  return { added, skipped, removed: removedCount };
 }
 
 /** 解析画布 frame 分组并写入各项目任务集 */
+/** 收集某分区内的任务行：区内 y 最小 text 视为标题（项目名，不参与任务） */
+function collectRegionTasks(textsInRegion) {
+  const sorted = [...textsInRegion].sort((a, b) => (a.y || 0) - (b.y || 0));
+  const incoming = [];
+  for (const t of sorted) {
+    for (const line of String(t.text || "").split(/\r?\n/)) {
+      const task = parseTaskLine(line);
+      if (task && !task.done) incoming.push(task);
+    }
+  }
+  return { incoming };
+}
+
 async function handleTaskSet() {
   const elements = await fetchCanvasElements();
-  const frames = elements.filter((e) => e.type === "frame");
   const projects = [];
-  for (const f of frames) {
-    const name = String(f.name || "").trim() || f.id;
+
+  // 模式 A（优先）：画布上用 frame 元素分组（原逻辑）
+  const frames = elements.filter((e) => e.type === "frame");
+  // 模式 B：无 frame 时用大矩形分区（A 方案：rectangle 底框 + 区内首个 text 为项目名标题）
+  const rects = elements.filter(
+    (e) => e.type === "rectangle" && (e.width || 0) >= 300 && (e.height || 0) >= 200
+  );
+  if (frames.length === 0 && rects.length === 0) {
+    return { projects: [], note: "no-frames-or-regions" };
+  }
+
+  const groups = []; // { name, elements }
+  if (frames.length > 0) {
+    for (const f of frames) {
+      groups.push({ name: String(f.name || "").trim() || f.id, elements: elements.filter((e) => e.frameId === f.id && e.type === "text" && !e.containerId) });
+    }
+  } else {
+    for (const r of rects) {
+      const inRect = (e) => e.x >= r.x && e.x <= r.x + (r.width || 0) && e.y >= r.y && e.y <= r.y + (r.height || 0);
+      const texts = elements.filter((e) => e.type === "text" && inRect(e));
+      if (texts.length === 0) continue;
+      texts.sort((a, b) => (a.y || 0) - (b.y || 0));
+      // 区内第一个文本 = 标题/项目名（不当作任务）
+      const titleText = String((texts[0].text || "").split(/\r?\n/)[0]).trim();
+      const bodyTexts = texts.slice(1);
+      if (titleText) groups.push({ name: titleText, elements: bodyTexts });
+    }
+  }
+
+  for (const g of groups) {
+    const name = g.name;
     const projectPath = resolveProjectPath(name);
     const r = { frame: name, path: projectPath, added: 0, skipped: 0, error: null };
     try {
       if (!projectPath || !fs.existsSync(projectPath) || !fs.statSync(projectPath).isDirectory()) {
         throw new Error(`项目目录不存在: ${projectPath}`);
       }
-      // frame 内未绑定的 text 元素 → 逐行任务
-      const texts = elements.filter(
-        (e) => e.frameId === f.id && e.type === "text" && !e.containerId
-      );
-      const incoming = [];
-      for (const t of texts) {
-        for (const line of String(t.text || "").split(/\r?\n/)) {
-          const task = parseTaskLine(line);
-          if (task && !task.done) incoming.push(task);
-        }
-      }
+      const { incoming } = collectRegionTasks(g.elements);
       if (incoming.length === 0) {
         r.note = "no-tasks";
         projects.push(r);
         continue;
       }
       const file = path.join(projectPath, ".pi", "task_set.json");
-      const { added, skipped } = mergeTaskSet(file, path.basename(projectPath), incoming);
+      const { added, skipped, removed } = mergeTaskSet(file, path.basename(projectPath), incoming);
       r.added = added;
       r.skipped = skipped;
+      r.removed = removed;
       r.file = file;
     } catch (e) {
       r.error = e.message;

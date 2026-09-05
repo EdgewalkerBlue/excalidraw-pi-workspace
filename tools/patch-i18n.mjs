@@ -188,6 +188,21 @@ function patchBundle() {
     return false;
   }
 
+  // 1c. 前端心跳 sync 降频：变化后防抖全量上传 1200ms → 5000ms（实时性由 WS 逐元素广播保证；
+  //     服务端 noop/合并已挡等价上传）—— 大画布/多端下显著减少网络与写盘
+  const OLD_NVE = `Nve=1200`;
+  const NEW_NVE = `Nve=5000`;
+  if (src.includes(NEW_NVE)) {
+    console.log("[patch-i18n] 心跳 sync 已降频(5s)，跳过");
+  } else if (src.includes(OLD_NVE)) {
+    src = src.split(OLD_NVE).join(NEW_NVE);
+    changed = true;
+    console.log("[patch-i18n] 前端心跳 sync 降频 1200ms → 5000ms");
+  } else {
+    console.error("[patch-i18n] 未找到 Nve 标记，请人工检查 bundle");
+    return false;
+  }
+
   // 1b. 右上角 UI 文本（逐条幂等替换）
   for (const [oldStr, newStr] of UI_TEXT_PATCHES) {
     if (src.includes(newStr)) continue; // 已替换
@@ -225,7 +240,7 @@ function syncInjection() {
 
 // ---------- 3. 升级 PWA 缓存版本（已安装客户端强制刷新 bundle/注入脚本） ----------
 // 每次 patch 内容变更（文本替换/注入脚本更新）后需提升目标版本
-const TARGET_SW_VER = 8;
+const TARGET_SW_VER = 11;
 function bumpSwCache() {
   const sw = path.join(FRONTEND, "sw.js");
   if (!fs.existsSync(sw)) return true; // 未启用 PWA 则跳过

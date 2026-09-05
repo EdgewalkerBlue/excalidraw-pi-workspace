@@ -94,6 +94,7 @@ excalidraw-workspace/
 │   ├── patch-pwa.mjs          # Web UI PWA + 按钮注入补丁
 │   ├── patch-i18n.mjs         # Web UI 默认语言/双语/翻译补齐补丁
 │   ├── patch-server.mjs       # Canvas server 落盘备份轮转补丁（防误覆盖）
+│   ├── fix-canvas-indices.mjs # 画布元素 index 规范化（大写 index 致无法新增）
 │   ├── auth-proxy.mjs         # 可选 Basic Auth 代理
 │   └── pi-extensions/
 │       └── agent-notify-watch.ts  # Pi 扩展（实时通知+自动触发+Reject回滚指示）
@@ -172,7 +173,9 @@ netsh advfirewall firewall add rule name="Excalidraw Workspace 5001" dir=in acti
 
 1. 在画布上用 **frame tool（框架）** 框定各项目区域，**frame 名 = 项目名**（如 `excalidraw-workspace`，映射到 `<项目根>/.pi/task_set.json`；也支持绝对路径）
 2. frame 内添加文本任务：行首 `P0`~`P3` 为优先级（默认 P2）；行首 `✓`/`已完成` 表示完成（自动跳过）
-3. 点击 **Send to Task Set**（发送到任务集）：各 frame 的未完成任务写入对应项目的 `.pi/task_set.json` —— 标题去重（幂等）、生成 `T-日期-序号` id、状态"待执行"、P 级稳定排序
+3. 点击 **Send to Task Set**（发送到任务集）：
+   - 写入规则：**只保留未完成项** —— 目标任务集中状态为“已完成”的历史任务自动剔除；
+   - 画布未完成任务去重（标题）后追加，生成 `T-日期-序号` id、状态“待执行”、P 级稳定排序
 
 ### Send to Agent
 
@@ -238,6 +241,13 @@ node tools/patch-pwa.mjs
 
 # Web UI 补丁（默认中文 + 底部浮窗语言切换；start-canvas.bat 启动时自动执行）
 node tools/patch-i18n.mjs
+
+# Canvas server 落盘备份轮转补丁（防误覆盖；start-canvas.bat 启动时自动执行）
+node tools/patch-server.mjs
+
+# 画布 index 规范化（大写/非法 index 会导致 Excalidraw 无法新增元素）
+node tools/fix-canvas-indices.mjs --server http://127.0.0.1:5001   # 一键修复线上画布
+node tools/fix-canvas-indices.mjs <输入.json> <输出.json>            # 修复本地 .excalidraw/备份
 ```
 
 ## License
