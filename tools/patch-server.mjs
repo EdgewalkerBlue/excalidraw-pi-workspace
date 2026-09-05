@@ -148,12 +148,15 @@ const SYNC_NEW = `        // ── pi-sync-guard v1: 合并/保护（防覆盖/
         elements._piLastGoodSyncAt = Date.now();
         logger.info(\`[sync-guard] sync merged: +/\${_writes.length} new-or-updated, -\${_removedIds.length} removed (before \${beforeCount} -> after \${elements.size})\`);
 
-        // c) 逐元素广播（element_created/updated/deleted）→ 各端实时收敛；Pi 批量回写可逐步显示
-        for (const w of _writes) {
-            broadcast({ type: w.kind === 'created' ? 'element_created' : 'element_updated', element: w.element });
-        }
-        for (const rid of _removedIds) {
-            broadcast({ type: 'element_deleted', elementId: rid });
+        // c) 聚合广播 initial_elements（整场景替换）→ 各端收敛（逐元素广播含 frame 时会导致前端场景状态崩坏）
+        if (_writes.length > 0 || _removedIds.length > 0) {
+            const _filesObj = {};
+            files.forEach((f2, id) => { _filesObj[id] = f2; });
+            broadcast({
+                type: 'initial_elements',
+                elements: Array.from(elements.values()),
+                ...(files.size > 0 ? { files: _filesObj } : {})
+            });
         }
 
         // 4. Return sync results
