@@ -6,6 +6,21 @@
 - 默认假设为**可信局域网**（192.168.0.0/23），防火墙仅放行该子网访问 5001
 - Android 通过 `http://192.168.0.1:5001` 访问
 
+## Tailscale 远程访问（公网）
+
+本机已接入 Tailscale（无需公网 IP/端口转发，WireGuard 加密隧道）：
+
+- tailnet 信息：主机名 **win-pi** / IP **100.119.236.89**（账号 EdgewalkerBlue）
+- 外部设备：安装 Tailscale 并**登录同一账号**后即可访问下表服务（防火墙已放行 Tailscale 网段 100.64.0.0/10）
+
+| 用途 | 访问方式 | 前提 |
+|---|---|---|
+| 画布 WebUI | `http://win-pi:5001` 或 `http://100.119.236.89:5001` | 外部设备同一 tailnet |
+| 公网认证模式 | `http://win-pi:5003`（Basic Auth，start-auth.bat） | 启动 start-auth.bat |
+| 连 Pi（远程终端） | `ssh PC@win-pi`（密码=Windows 登录密码）后运行 `pi` | OpenSSH Server 已启用(:22)，PC 用户 PATH 含 pi |
+
+> 常用命令：`tailscale status`（查看节点）/ `tailscale up`（登录）。
+
 ## 认证（公网模式，一键启用）
 
 当画布需要暴露到**公网**或不可信网络时，必须启用认证：

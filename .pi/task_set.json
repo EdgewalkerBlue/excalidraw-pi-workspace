@@ -22,6 +22,12 @@
         "路径": "tools/auth-proxy.mjs / start-auth.bat / SECURITY.md / README.md",
         "状态": "已完成"
       }
+      {
+        "id": "T-20260905-001",
+        "标题": "P1 Tailscale 公网访问：安装+入网(win-pi/100.119.236.89)；修复 C:\\Windows\\Installer 缺失致 MSI 安装全失败；OpenSSH Server 启用(:22 自启)；防火墙放行 Tailscale 网段→5001/5003/5010/22；README/SECURITY 远程访问说明",
+        "路径": "SECURITY.md / 系统配置",
+        "状态": "已完成"
+      }
     ]
   }
 }
