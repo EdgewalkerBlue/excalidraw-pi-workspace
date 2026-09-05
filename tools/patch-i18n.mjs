@@ -225,7 +225,7 @@ function syncInjection() {
 
 // ---------- 3. 升级 PWA 缓存版本（已安装客户端强制刷新 bundle/注入脚本） ----------
 // 每次 patch 内容变更（文本替换/注入脚本更新）后需提升目标版本
-const TARGET_SW_VER = 9;
+const TARGET_SW_VER = 10;
 function bumpSwCache() {
   const sw = path.join(FRONTEND, "sw.js");
   if (!fs.existsSync(sw)) return true; // 未启用 PWA 则跳过

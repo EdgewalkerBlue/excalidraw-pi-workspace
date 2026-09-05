@@ -114,6 +114,10 @@ function mergeTaskSet(file, projectDirName, incoming) {
   ts.名称 = ts.名称 || projectDirName;
   ts.创建时间 = ts.创建时间 || new Date().toISOString().slice(0, 10);
   ts.任务列表 = Array.isArray(ts.任务列表) ? ts.任务列表 : [];
+  // 约定：任务集只保留未完成项 —— 自动剔除状态为"已完成"的历史任务
+  const removed = ts.任务列表.length;
+  ts.任务列表 = ts.任务列表.filter((t) => String(t.状态 || "") !== "已完成");
+  const removedCount = removed - ts.任务列表.length;
 
   const existTitles = new Set(
     ts.任务列表.map((t) => String(t.标题 || "").replace(/^P[0-3]\s*/, "").trim())
@@ -144,7 +148,7 @@ function mergeTaskSet(file, projectDirName, incoming) {
 
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, JSON.stringify(doc, null, 2), "utf8");
-  return { added, skipped };
+  return { added, skipped, removed: removedCount };
 }
 
 /** 解析画布 frame 分组并写入各项目任务集 */
@@ -177,9 +181,10 @@ async function handleTaskSet() {
         continue;
       }
       const file = path.join(projectPath, ".pi", "task_set.json");
-      const { added, skipped } = mergeTaskSet(file, path.basename(projectPath), incoming);
+      const { added, skipped, removed } = mergeTaskSet(file, path.basename(projectPath), incoming);
       r.added = added;
       r.skipped = skipped;
+      r.removed = removed;
       r.file = file;
     } catch (e) {
       r.error = e.message;

@@ -469,7 +469,10 @@
         btn.disabled = false;
         btn.title = ps
           .map(function (p) {
-            return p.frame + " → +" + (p.added || 0) + (p.skipped ? " (跳过" + p.skipped + ")" : "") + (p.error ? " [" + p.error + "]" : "");
+            return p.frame + " → +" + (p.added || 0) +
+              (p.skipped ? " (跳过" + p.skipped + ")" : "") +
+              (p.removed ? " (剔除已完成" + p.removed + ")" : "") +
+              (p.error ? " [" + p.error + "]" : "");
           })
           .join("\n") || T("No frames on canvas", "画布上没有 frame");
         setTimeout(function () {

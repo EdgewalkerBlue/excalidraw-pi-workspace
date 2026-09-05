@@ -173,7 +173,9 @@ netsh advfirewall firewall add rule name="Excalidraw Workspace 5001" dir=in acti
 
 1. 在画布上用 **frame tool（框架）** 框定各项目区域，**frame 名 = 项目名**（如 `excalidraw-workspace`，映射到 `<项目根>/.pi/task_set.json`；也支持绝对路径）
 2. frame 内添加文本任务：行首 `P0`~`P3` 为优先级（默认 P2）；行首 `✓`/`已完成` 表示完成（自动跳过）
-3. 点击 **Send to Task Set**（发送到任务集）：各 frame 的未完成任务写入对应项目的 `.pi/task_set.json` —— 标题去重（幂等）、生成 `T-日期-序号` id、状态"待执行"、P 级稳定排序
+3. 点击 **Send to Task Set**（发送到任务集）：
+   - 写入规则：**只保留未完成项** —— 目标任务集中状态为“已完成”的历史任务自动剔除；
+   - 画布未完成任务去重（标题）后追加，生成 `T-日期-序号` id、状态“待执行”、P 级稳定排序
 
 ### Send to Agent
 
