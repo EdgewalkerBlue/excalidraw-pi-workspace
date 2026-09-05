@@ -30,7 +30,7 @@
            │ WebSocket 实时同步         │  └───────────┬────────────┘  │
            │ (无认证内网)                │              │ REST /api      │
            ▼                           │  ┌───────────▼────────────┐  │
-    http://192.168.0.1:5001            │  │ agent-notify :5010      │  │
+    http://<LAN-IP>:5001            │  │ agent-notify :5010      │  │
                                        │  │ (标记文件 .agent/*.json) │  │
                                        │  └───────────┬────────────┘  │
                                        │              │ 文件变化监听    │
@@ -154,7 +154,7 @@ copy tools\pi-extensions\agent-notify-watch.ts %USERPROFILE%\.pi\agent\extension
 node tools/patch-pwa.mjs
 
 # 5. 浏览器 / Android 打开
-#    http://192.168.0.1:5001   （换成你的 LAN IP）
+#    http://<LAN-IP>:5001   （换成你的 LAN IP）
 ```
 
 ### 防火墙（Android 局域网访问）
@@ -162,7 +162,8 @@ node tools/patch-pwa.mjs
 管理员 CMD：
 
 ```bat
-netsh advfirewall firewall add rule name="Excalidraw Workspace 5001" dir=in action=allow protocol=TCP localport=5001 remoteip=192.168.0.0/255.255.0.0
+rem 把 <LAN网段CIDR> 换成你的局域网网段（CIDR 写法）
+netsh advfirewall firewall add rule name="Excalidraw Workspace 5001" dir=in action=allow protocol=TCP localport=5001 remoteip=<LAN网段CIDR>
 ```
 
 ## 协作流程
@@ -205,7 +206,7 @@ Pi 执行前生成门禁报告：画布统计（节点/箭头/Binding）、增�
 
 ## 安全说明
 
-- Canvas server API 无内置认证，默认绑定局域网（防火墙仅放行 192.168.0.0/23）
+- Canvas server API 无内置认证，默认绑定局域网（防火墙仅放行 <LAN 网段>）
 - 公网暴露必须启用认证代理（`tools/auth-proxy.mjs`，Basic Auth + WebSocket 转发）并配合 HTTPS
 - 破坏性操作（批量删除、force push、生产变更、系统级配置、删除项目/画布）需 Review Gate 双重确认
 - 详见 [SECURITY.md](SECURITY.md)

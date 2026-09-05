@@ -3,23 +3,27 @@
 ## 当前部署形态
 
 - Canvas server 绑定 `0.0.0.0:5001`（局域网可访问，API **无内置认证**）
-- 默认假设为**可信局域网**（192.168.0.0/23），防火墙仅放行该子网访问 5001
-- Android 通过 `http://192.168.0.1:5001` 访问
+- 默认假设为**可信局域网**（`<LAN 网段>`），防火墙仅放行该子网访问 5001
+- Android 通过 `http://<LAN-IP>:5001` 访问
 
 ## Tailscale 远程访问（公网）
 
-本机已接入 Tailscale（无需公网 IP/端口转发，WireGuard 加密隧道）：
+本机可接入 Tailscale（WireGuard 加密隧道，无需公网 IP/端口转发）：
 
-- tailnet 信息：主机名 **win-pi** / IP **100.119.236.89**（账号 EdgewalkerBlue）
-- 外部设备：安装 Tailscale 并**登录同一账号**后即可访问下表服务（防火墙已放行 Tailscale 网段 100.64.0.0/10）
+```bash
+# 首次：安装 Tailscale 并登录（加入你自己的 tailnet）
+tailscale up --hostname=<你的主机名>
+tailscale status        # 查看本机主机名与 tailnet IP（100.x.y.z）
+```
+
+- 外部设备：安装 Tailscale 并**登录同一 tailnet 账号**后即可访问下表服务
+- 防火墙需放行 Tailscale 网段（100.64.0.0/10）→ 5001/5003/5010/22
 
 | 用途 | 访问方式 | 前提 |
 |---|---|---|
-| 画布 WebUI | `http://win-pi:5001` 或 `http://100.119.236.89:5001` | 外部设备同一 tailnet |
-| 公网认证模式 | `http://win-pi:5003`（Basic Auth，start-auth.bat） | 启动 start-auth.bat |
-| 连 Pi（远程终端） | `ssh PC@win-pi`（密码=Windows 登录密码）后运行 `pi` | OpenSSH Server 已启用(:22)，PC 用户 PATH 含 pi |
-
-> 常用命令：`tailscale status`（查看节点）/ `tailscale up`（登录）。
+| 画布 WebUI | `http://<tailscale-主机名>:5001`（或 `http://<tailnet-IP>:5001`） | 外部设备同一 tailnet |
+| 公网认证模式 | `http://<tailscale-主机名>:5003`（Basic Auth，start-auth.bat） | 启动 start-auth.bat |
+| 连 Pi（远程终端） | `ssh <Windows-用户名>@<tailscale-主机名>`（密码=Windows 登录密码）后运行 `pi` | OpenSSH Server 已启用(:22)，登录用户 PATH 含 pi |
 
 ## 认证（公网模式，一键启用）
 
@@ -35,7 +39,7 @@ start-auth.bat
 # 或手动启动：
 # 1. 将 canvas server 绑回本机（start-auth.bat 内部：HOST=127.0.0.1）并重启
 # 2. 启动认证代理（Basic Auth + WebSocket 转发）
-EXCALIDRAW_AUTH_USER=admin EXCALIDRAW_AUTH_PASS=<强密码> node tools/auth-proxy.mjs
+EXCALIDRAW_AUTH_USER=<用户名> EXCALIDRAW_AUTH_PASS=<强密码> node tools/auth-proxy.mjs
 # 3. 对外暴露 http://<host>:5003（含认证）
 ```
 
