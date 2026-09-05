@@ -5,52 +5,10 @@
     "说明": "Excalidraw × Pi Agent 双向协作工作区（Android 可访问无限画布 + MCP CLI 桥接 + Review Gate）",
     "任务列表": [
       {
-        "id": "T-20260905-003",
-        "标题": "P1 sync 版本/合并保护：POST /api/elements/sync 增加版本/冲突保护（如客户端基线版本校验/增量合并/空场景保护），消除多客户端互相覆盖与空场景清空画布",
-        "路径": "canvas server / 前端心跳 sync",
+        "id": "T-20260905-006",
+        "标题": "P4 前端心跳 sync 改为增量 diff / 降频（服务端 noop 快速路径已就绪；浏览器 bundle 定时器全量上传仍每 ~2s 一次，大画布可降频或只传变更）",
+        "路径": "mcp-excalidraw-server 前端 bundle / 心跳逻辑",
         "状态": "待执行"
-      },
-      {
-        "id": "T-20260905-004",
-        "标题": "P2 多设备多画布同步速度增强：降低 sync 全量频率/改为增量 diff、WebSocket 变更推送先行，减少大画布全量上传",
-        "路径": "前端心跳 sync / server WS",
-        "状态": "待执行"
-      },
-      {
-        "id": "T-20260905-005",
-        "标题": "P2 Pi 回写实时逐步显示：MCP/CLI 批量回写画布时元素逐个/分步推送（WS element_created/updated），浏览器端实时逐步呈现而非等全量完成",
-        "路径": "mcp-excalidraw-server 回写 / 前端 WS",
-        "状态": "待执行"
-      },
-      {
-        "id": "T-20260905-001",
-        "标题": "P1 Tailscale 公网访问：安装+入网(win-pi/100.119.236.89)；修复 C:\\Windows\\Installer 缺失致 MSI 安装全失败；OpenSSH Server 启用(:22 自启)；防火墙放行 Tailscale 网段→5001/5003/5010/22；README/SECURITY 远程访问说明",
-        "路径": "SECURITY.md / 系统配置",
-        "状态": "已完成"
-      },
-      {
-        "id": "T-20260905-002",
-        "标题": "P0 修复画布无法新增元素：根因=回写元素大写 index(aA0..)破坏 Excalidraw fractional-index 不变量(ELEMENT_HAS_INVALID_INDEX)；二分+改index实验证实；tools/fix-canvas-indices.mjs 规范化工具；已从 TooBaCO 归档恢复 22 元素(合法 index)",
-        "路径": "tools/fix-canvas-indices.mjs / 画布数据",
-        "状态": "已完成"
-      },
-      {
-        "id": "T-20260904-001",
-        "标题": "P1 Frame 边框色功能：色板一键改色（6色）+ 新建 frame 自动默认蓝 #1971c2（深色主题可见）；canvas 落盘备份轮转（patch-server.mjs，20 份，防误覆盖）",
-        "路径": "webui/send-to-agent.js / tools/patch-server.mjs",
-        "状态": "已完成"
-      },
-      {
-        "id": "T-20260901-003",
-        "标题": "P1 防火墙放行 5001 局域网访问（需管理员执行 netsh，Android 才能进入）",
-        "路径": "README.md 防火墙小节",
-        "状态": "待执行"
-      },
-      {
-        "id": "T-20260901-005",
-        "标题": "P2 公网认证模式：auth-proxy 强化（默认端口 5002→5003 避 vite、弱密码禁启动、.auth.env 自动加载）+ start-auth.bat 一键启动（随机强密码/canvas 绑 127.0.0.1/代理 5003）+ SECURITY/README 更新；已验证 401/200/API/WS 转发",
-        "路径": "tools/auth-proxy.mjs / start-auth.bat / SECURITY.md / README.md",
-        "状态": "已完成"
       }
     ]
   }
