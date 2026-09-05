@@ -28,6 +28,12 @@
         "路径": "SECURITY.md / 系统配置",
         "状态": "已完成"
       }
+      {
+        "id": "T-20260905-002",
+        "标题": "P0 修复画布无法新增元素：根因=回写元素大写 index(aA0..)破坏 Excalidraw fractional-index 不变量(ELEMENT_HAS_INVALID_INDEX)；二分+改index实验证实；tools/fix-canvas-indices.mjs 规范化工具；已从 TooBaCO 归档恢复 22 元素(合法 index)",
+        "路径": "tools/fix-canvas-indices.mjs / 画布数据",
+        "状态": "已完成"
+      }
     ]
   }
 }

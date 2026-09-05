@@ -389,16 +389,19 @@
     );
     btn.addEventListener("click", function (e) {
       e.stopPropagation();
-      menu.style.display = menu.style.display === "none" ? "block" : "none";
+      menu.style.display = menu.style.display === "none" ? "flex" : "none";
     });
     host.appendChild(btn);
 
     var menu = document.createElement("div");
     menu.id = FRAME_COLOR_MENU_ID;
+    // 注意：display 由 JS 控制（初始隐藏），cssText 内不能再设 display，
+    // 否则后声明的值会覆盖前面的 none，导致色板常驻并遮挡 Excalidraw 工具岛
     menu.style.cssText =
-      "display:none;position:absolute;top:40px;left:0;background:#fff;" +
+      "position:absolute;top:40px;left:0;background:#fff;" +
       "border:1px solid #d0d0d0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.16);" +
-      "z-index:100;padding:8px;display:flex;gap:8px;";
+      "z-index:100;padding:8px;gap:8px;";
+    menu.style.display = "none";
     FRAME_PALETTE.forEach(function (p) {
       var sw = document.createElement("button");
       sw.type = "button";

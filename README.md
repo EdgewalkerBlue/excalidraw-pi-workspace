@@ -94,6 +94,7 @@ excalidraw-workspace/
 │   ├── patch-pwa.mjs          # Web UI PWA + 按钮注入补丁
 │   ├── patch-i18n.mjs         # Web UI 默认语言/双语/翻译补齐补丁
 │   ├── patch-server.mjs       # Canvas server 落盘备份轮转补丁（防误覆盖）
+│   ├── fix-canvas-indices.mjs # 画布元素 index 规范化（大写 index 致无法新增）
 │   ├── auth-proxy.mjs         # 可选 Basic Auth 代理
 │   └── pi-extensions/
 │       └── agent-notify-watch.ts  # Pi 扩展（实时通知+自动触发+Reject回滚指示）
@@ -238,6 +239,13 @@ node tools/patch-pwa.mjs
 
 # Web UI 补丁（默认中文 + 底部浮窗语言切换；start-canvas.bat 启动时自动执行）
 node tools/patch-i18n.mjs
+
+# Canvas server 落盘备份轮转补丁（防误覆盖；start-canvas.bat 启动时自动执行）
+node tools/patch-server.mjs
+
+# 画布 index 规范化（大写/非法 index 会导致 Excalidraw 无法新增元素）
+node tools/fix-canvas-indices.mjs --server http://127.0.0.1:5001   # 一键修复线上画布
+node tools/fix-canvas-indices.mjs <输入.json> <输出.json>            # 修复本地 .excalidraw/备份
 ```
 
 ## License
