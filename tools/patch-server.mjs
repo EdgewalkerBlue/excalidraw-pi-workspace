@@ -170,11 +170,12 @@ const SYNC_NEW = `        // ── pi-sync-guard v1: 合并/保护（防覆盖/
 // ═══════════════ 补丁 2b：sync noop 快速路径（内容等价不广播不落盘） ═══════════════
 const NOOP_OLD = `        // b) 元素级合并：逐元素比较 updated（大者胜），旧场景不会覆盖更新过的元素`;
 const NOOP_NEW = `        // ── pi-sync-guard-noop: 内容等价时静默快速返回（防双端心跳风暴 / 重复逐元素广播）──
+        const _normKeys = ['updated','versionNonce','syncedAt','source','syncTimestamp','version','_piLastGoodSyncAt'];
+        const _normEl = (el) => { if (!el || typeof el !== 'object') return String(el); const c = {}; for (const k of Object.keys(el)) if (!_normKeys.includes(k)) c[k] = el[k]; return JSON.stringify(c); };
         if (frontendElements.length === elements.size) {
             const _same = frontendElements.every((el) => {
-                if (!el) return false;
                 const ex = elements.get(el.id);
-                return ex && Number(ex.updated) === Number(el.updated);
+                return ex && _normEl(ex) === _normEl(el);
             });
             if (_same) {
                 elements._piLastGoodSyncAt = Date.now();

@@ -3,13 +3,6 @@
     "名称": "excalidraw-workspace",
     "创建时间": "2026-09-01",
     "说明": "Excalidraw × Pi Agent 双向协作工作区（Android 可访问无限画布 + MCP CLI 桥接 + Review Gate）",
-    "任务列表": [
-      {
-        "id": "T-20260905-006",
-        "标题": "P4 前端心跳 sync 改为增量 diff / 降频（服务端 noop 快速路径已就绪；浏览器 bundle 定时器全量上传仍每 ~2s 一次，大画布可降频或只传变更）",
-        "路径": "mcp-excalidraw-server 前端 bundle / 心跳逻辑",
-        "状态": "待执行"
-      }
-    ]
+    "任务列表": []
   }
 }
