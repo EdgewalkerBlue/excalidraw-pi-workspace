@@ -5,6 +5,24 @@
     "说明": "Excalidraw × Pi Agent 双向协作工作区（Android 可访问无限画布 + MCP CLI 桥接 + Review Gate）",
     "任务列表": [
       {
+        "id": "AT-75321738",
+        "标题": "【AT试例C】excalidraw：报告追加验证",
+        "路径": "D:\\projects\\excalidraw-workspace",
+        "P": "P4",
+        "状态": "执行中",
+        "开始时间": "2026-09-06 14:15",
+        "来源": "auto-tasks"
+      },
+      {
+        "id": "AT-74422021",
+        "标题": "【AT测试4】excalidraw：睡眠汇报（项目回写验证）",
+        "路径": "D:\\projects\\excalidraw-workspace",
+        "P": "P4",
+        "状态": "执行中",
+        "开始时间": "2026-09-06 14:00",
+        "来源": "auto-tasks"
+      },
+      {
         "id": "T-20260905-007",
         "标题": "P3 frame 持久化（B3 前端 patch 支持 frame roundtrip / B4 上游 issue 已提，等上游修复或自研 patch）",
         "路径": "mcp-excalidraw-server 前端 bundle / 上游 yctimlin/mcp_excalidraw",
