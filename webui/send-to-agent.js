@@ -7,8 +7,10 @@
  *   - Reject        : 回退已发送内容/取消执行中任务（红色；未 Send 时不显示）
  *
  * 另在 Excalidraw 底部右侧浮窗注入语言切换器（中文 / English），并同步
- * 右上角 header 文本语言（写入 localStorage["excalidraw-canvas-lang"] 后
- * 刷新生效；默认英文由 tools/patch-i18n.mjs 注入到 Excalidraw bundle）。
+ * 右上角 header 文本语言（切换时写入 localStorage["excalidraw-canvas-lang"]
+ * 与同名 cookie 后刷新生效；localStorage 按 origin 隔离，cookie 不区分端口，
+ * 由 patch-i18n 注入的 index.html 引导脚本把 cookie 偏好同步到新入口的
+ * localStorage；默认英文由 tools/patch-i18n.mjs 注入到 Excalidraw bundle）。
  *
  * 依赖：tools/agent-notify.mjs（监听 5010）运行中。
  * 状态同步：3s 轮询 /health（pending / approved / rejected）。
@@ -52,11 +54,21 @@
     { code: "en", label: "English" },
   ];
 
+  function getLangCookie() {
+    try {
+      var m = document.cookie.match(/(?:^|;\s*)excalidraw-canvas-lang=(en|zh-CN)(?:;|$)/);
+      if (m) return m[1];
+    } catch (e) {}
+    return null;
+  }
+
   function getCurrentLang() {
     try {
       var c = localStorage.getItem(LANG_KEY);
       if (c === "en" || c === "zh-CN") return c;
     } catch (e) {}
+    var ck = getLangCookie(); // localStorage 为空时回退 cookie（跨端口偏好）
+    if (ck === "en" || ck === "zh-CN") return ck;
     return "en"; // 默认英文（与 patch-i18n 注入的 bundle 默认值一致）
   }
 
@@ -108,6 +120,11 @@
       item.addEventListener("click", function () {
         try {
           localStorage.setItem(LANG_KEY, l.code);
+        } catch (e) {}
+        try {
+          // cookie 不区分端口：localhost:5001 与 :5003 认证入口共享语言偏好
+          document.cookie =
+            LANG_KEY + "=" + l.code + ";path=/;max-age=31536000;SameSite=Lax";
         } catch (e) {}
         location.reload();
       });

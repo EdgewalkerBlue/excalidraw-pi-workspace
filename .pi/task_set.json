@@ -3,13 +3,15 @@
     "名称": "excalidraw-workspace",
     "创建时间": "2026-09-01",
     "说明": "Excalidraw × Pi Agent 双向协作工作区（Android 可访问无限画布 + MCP CLI 桥接 + Review Gate）",
+    "最后截停": "2026-09-10 08:40 早间自动截停：AT-75321738、AT-74422021 由执行中改为已截断（未完成），未完成项全部保留本表",
     "任务列表": [
       {
         "id": "AT-75321738",
         "标题": "【AT试例C】excalidraw：报告追加验证",
         "路径": "D:\\projects\\excalidraw-workspace",
         "P": "P4",
-        "状态": "执行中",
+        "状态": "已截断（未完成）",
+        "截断时间": "2026-09-10 08:40",
         "开始时间": "2026-09-06 14:15",
         "来源": "auto-tasks"
       },
@@ -18,7 +20,8 @@
         "标题": "【AT测试4】excalidraw：睡眠汇报（项目回写验证）",
         "路径": "D:\\projects\\excalidraw-workspace",
         "P": "P4",
-        "状态": "执行中",
+        "状态": "已截断（未完成）",
+        "截断时间": "2026-09-10 08:40",
         "开始时间": "2026-09-06 14:00",
         "来源": "auto-tasks"
       },
@@ -27,6 +30,118 @@
         "标题": "P3 frame 持久化（B3 前端 patch 支持 frame roundtrip / B4 上游 issue 已提，等上游修复或自研 patch）",
         "路径": "mcp-excalidraw-server 前端 bundle / 上游 yctimlin/mcp_excalidraw",
         "状态": "待执行"
+      },
+      {
+        "id": "T-20260914-001",
+        "标题": "上游 Excalidraw 变更合并与稳定性测试（master 397 commits → canary 0.18.0-afa3a65）",
+        "路径": "D:projectsexcalidraw-workspace",
+        "P": "P2",
+        "状态": "已完成",
+        "完成时间": "2026-09-14",
+        "结果": {
+          "合并内容": "根依赖 @excalidraw/excalidraw 固定为 0.18.0-afa3a65（上游 v0.18.1 后 397 提交的 npm next 构建产物，含 mermaid-to-excalidraw@2.2.2 安全线）；src/App.tsx 适配 1 处破坏性变更：excalidrawAPI prop → onExcalidrawAPI（mount 传 api / unmount 传 null）",
+          "影响面": "仅 :5002 工作区应用；:5001 画布用 mcp-excalidraw-server 预构建 bundle（嵌套自己的 0.18.1），不受影响，回归 smoke 通过（41 元素/回写/409 保护）",
+          "稳定性测试": "静态全绿（tsc+vite 构建/单测4/4/npm audit 0 漏洞）；GUI 对比测试（0.18.1 基线 vs canary 同套冒烟）：新建/绘制/自动保存写入/刷新持久化/保存文件下载均正常，主线程漂移 3-16ms 健康；结论=可合并，已保留合并",
+          "测试发现（既有 bug，非本次引入）": ":5002 自动保存状态指示「…修改中」永不显示「✓已自动保存」——两版本共有。机制：Excalidraw 从 componentDidUpdate 发 onChange → setSaveState 触发重渲染 → 再触发 componentDidUpdate → onChange 同步刷回，saved 状态永远来不及绘制。实际存储每周期正常写入，仅显示层问题",
+          "canary 备注": "canary 为 master 快照（非稳定通道），升级需手动改固定版本；上游 Unreleased 含 sticky note 元素/滚轮导航/工具栏 DOM 重构（radio→button）等，工具栏重构将来升级 mcp-excalidraw-server 前端时会破坏 patch-i18n 正则假设（记技术债）"
+        },
+        "maintainability_check": {
+          "existing_code_searched": true,
+          "reuse_considered": true,
+          "reuse_decision": "extend_existing（沿用现有 App.tsx 与补丁链，仅 1 处 prop 适配，无新建抽象）",
+          "duplicate_logic_introduced": false,
+          "error_suppression_introduced": false,
+          "dependency_check_completed": true,
+          "final_diff_reviewed": true,
+          "tests_passed": true,
+          "typecheck_passed": true,
+          "lint_passed": null,
+          "build_passed": true,
+          "verification_gaps": [
+            "项目无独立 lint 脚本",
+            "IAB 截图对 canvas 页面间歇超时，部分测试点以 DOM/存储探针替代视觉验证",
+            "cua 拖拽绘制在本环境约 50% 失败率（两版本一致，工具限制非版本缺陷）"
+          ],
+          "technical_debt": [
+            "上游工具栏 DOM 重构将影响 patch-i18n.mjs 正则假设（升级 mcp-excalidraw-server 前端时需重写补丁匹配）",
+            ":5002 自动保存状态指示振荡（既有显示 bug，待单独修复：状态更新应与 onChange 解耦，如用 ref+独立定时器）"
+          ],
+          "unresolved_risks": [
+            "canary 非稳定通道，后续升级需关注上游 Unreleased 破坏性变更清单（scrollToContent→setViewport 等，当前项目未使用）"
+          ]
+        }
+      },
+      {
+        "id": "T-20260915-001",
+        "标题": "启动故障修复：start-canvas.bat 解析中断 + 5002 残留进程占用",
+        "路径": "D:\\projects\\excalidraw-workspace",
+        "P": "P1",
+        "状态": "已完成",
+        "完成时间": "2026-09-15",
+        "结果": {
+          "根因1（致命）": "start-canvas.bat 5010 检查的 else 块内 echo 文本含未转义 ASCII 括号「(agent-notify :5010)」，右括号提前闭合代码块，行尾 ... 触发「... was unexpected at this time」解析错误，整个 bat 在启动任何服务前中止（自 2ac8648/09-04 引入，隔离实验复现：纯 ASCII 同样炸，与编码无关）",
+          "根因2（噪音）": "UTF-8 中文 rem 注释行在 chcp 65001 下使 cmd 解析器失步，把行片段当命令执行（'Canvas' is not recognized；去 chcp 则变 '001' 报错），多行注释必现",
+          "根因3（占用）": "09-14 23:45 遗留的 npm run preview（PID 7812/11448）占住 5002；vite.config 双 strictPort:5002 下 npm run dev / start 直接报 Port 5002 is already in use 退出",
+          "修复": "① 块内括号转义 ^(agent-notify :5010^)；② 头部 rem 注释改 ASCII 英文并注明禁用中文注释原因；③ <占用PID>/<本机LAN-IP> 尖括号转义（重定向劫持隐患）；④ taskkill 残留进程 7812/11448",
+          "统一化（同日追补）": "全项目 .bat 统一规则「rem 注释纯 ASCII、echo 用户输出保留中文」：start-auth.bat 头部+6 处分段注释 ASCII 化（含 rem 行内 <公网IP> 尖括号隐患清除）；start-canvas.bat 5 处分段注释 ASCII 化（2)/2) 重复编号顺带修正为 2)/3)）；mcp-cli.bat LF→CRLF + 注释 ASCII 化（cmd 对 LF-only bat 解析同样不可靠）",
+          "验证": "start-canvas.bat 端到端跑通（5001 canvas + 5010 agent-notify 双监听、页面/API 200）；npm start 5002 正常启动；start-auth.bat 端到端跑通（5001 仅 127.0.0.1 绑定 / 5003 无凭据 401、带凭据 200 / 5010 200）；结束后全部实例已停、端口全释放、测试用 .auth.env 已删"
+        },
+        "maintainability_check": {
+          "existing_code_searched": true,
+          "reuse_considered": true,
+          "reuse_decision": "fix_existing（就地修复 bat，不改启动架构）",
+          "duplicate_logic_introduced": false,
+          "error_suppression_introduced": false,
+          "dependency_check_completed": true,
+          "final_diff_reviewed": true,
+          "tests_passed": true,
+          "typecheck_passed": null,
+          "lint_passed": null,
+          "build_passed": true,
+          "verification_gaps": [
+            "项目无独立 lint/typecheck 适用项（bat + 进程级修复，npm run build 已另行跑通）"
+          ],
+          "technical_debt": [
+            "start-auth.bat 头部同为 UTF-8 中文 rem + chcp 65001，存在同款解析失步噪音风险（块内括号已确认全为全角，无致命项），建议后续统一 ASCII 化",
+            "项目 bats 缺少 smoke 自检脚本，bat 回归需手工端到端验证"
+          ],
+          "unresolved_risks": []
+        }
+      },
+      {
+        "id": "T-20260915-002",
+        "标题": "README 双语化拆分（英文主显）+ 过时内容修正 + 项目简介补齐",
+        "路径": "D:\\projects\\excalidraw-workspace",
+        "P": "P2",
+        "状态": "已完成",
+        "完成时间": "2026-09-15",
+        "结果": {
+          "拆分": "README.md = 英文版（GitHub 首页主显），README_ZH.md = 中文版；两文件第 1 行互为语言跳转链接（English | 简体中文 / [English](README.md) | 简体中文）",
+          "新增简介": "两语言版均补「项目简介 / Project Overview」：项目定位（可视化需求与架构工作台）、双向协作闭环、核心特性 4 条、端口分工表（5001/5002/5003/5010）",
+          "过时修正": "① 画布不再入库 Git（*.excalidraw 已 gitignore，256edbb）：功能清单「Git 版本化」行改为「画布持久化」，数据流 export 改本地快照归档，架构图 Git 仓库内容更新；② Excalidraw 版本 0.18.1 → 0.18.0-afa3a65（canary 固定 + 注脚说明 Server 内嵌 0.18.1）；③ npm start = preview 说明、start 脚本自动补丁提示；④ 目录树补 start-auth.bat 与 README_ZH.md",
+          "验证": "两文件第 1 行互链正确；grep 全项目无 README_EN.md 残留引用（防止指向不存在的文件）",
+          "用词修正（同日追补）": "画布不依赖手机：两份 README 全部「Android 手机/Android access/Android 局域网访问」等表述改为「浏览器 / Browser」口径（简介、引言、架构图、数据流、功能清单、环境要求、防火墙小节、快速开始第 5 步共 9 处/份），grep 复核 android 字样清零；触屏/手写笔/PWA 等能力描述保留"
+        },
+        "maintainability_check": {
+          "existing_code_searched": true,
+          "reuse_considered": true,
+          "reuse_decision": "extend_existing（基于既有 README 内容翻译与增补，未另起平行文档体系）",
+          "duplicate_logic_introduced": false,
+          "intentional_duplication": true,
+          "intentional_duplication_reason": "双语两份 README 内容镜像属于用户要求的文档形态，非代码重复",
+          "error_suppression_introduced": false,
+          "dependency_check_completed": true,
+          "final_diff_reviewed": true,
+          "tests_passed": null,
+          "typecheck_passed": null,
+          "lint_passed": null,
+          "build_passed": null,
+          "verification_gaps": [
+            "纯文档改动，项目无文档 lint 工具；链接有效性以 grep 静态核验（GitHub 锚点渲染未实际预览）"
+          ],
+          "technical_debt": [],
+          "unresolved_risks": []
+        }
       }
     ]
   }

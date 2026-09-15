@@ -160,7 +160,7 @@ export default function App() {
       </div>
       <div className="canvas-wrap">
         <Excalidraw
-          excalidrawAPI={(api) => {
+          onExcalidrawAPI={(api) => {
             excalidrawAPI.current = api;
           }}
           initialData={initialData}
