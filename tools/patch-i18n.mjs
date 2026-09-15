@@ -2,17 +2,22 @@
 /**
  * i18n 补丁脚本
  *
- * 让 mcp-excalidraw-server Web UI（:5001）默认使用中文界面，并提供语言切换：
+ * 让 mcp-excalidraw-server Web UI（:5001）默认英文界面、可切换中文（切换后
+ * 持久记忆），并补齐双语 UI：
  *
- *   1. 修改 Excalidraw bundle（index-DBs1chWU.js）：
- *      - 默认语言 en → zh-CN（与 excalidraw.com 使用相同的官方翻译包）
- *      - 支持 localStorage["excalidraw-canvas-lang"] 覆盖（语言切换器写入，
- *        值为 "zh-CN" 时显示中文，否则默认英文）
+ *   1. 修改 Excalidraw bundle（assets/index-*.js 主包，文件名自动发现）：
+ *      - 默认语言保持英文；localStorage["excalidraw-canvas-lang"]==="zh-CN"
+ *        时显示中文（与 excalidraw.com 使用相同的官方翻译包）
+ *      - 语言切换器同时写 localStorage 与同名 cookie；index.html 注入引导
+ *        脚本把 cookie 偏好同步到 localStorage，使偏好跨 :5001/:5003 入口
+ *        保持（cookie 不区分端口，localStorage 按 origin 隔离）
  *      - 右上角 header 文本随语言切换（渲染时读 localStorage 动态选择
  *        中/英文；"清除画布"用官方 zh-CN 条目，其余自译）
  *      - 补齐官方 zh-CN 翻译缺失组（画布查找/箭头类型/元素链接/图片裁剪/
  *        框架/流程图/AI 文字转图表等 0.18 新功能，约 50 条，译法随语言切换）
- *   1b. 页面标题（index.html <title>）→ "Excalidraw 画布工作区"
+ *   1b. 页面标题（index.html <title>）→ "Excalidraw Canvas Workspace"
+ *       （静态英文，页面加载后由 send-to-agent.js 按语言动态覆盖）
+ *   1c. index.html 注入语言引导脚本（cookie → localStorage 同步，见上）
  *   2. 同步 webui/send-to-agent.js → dist/frontend/send-to-agent.js
  *      （send-to-agent.js 内含底部浮窗语言切换器）
  *
@@ -35,8 +40,22 @@ const FRONTEND = path.resolve(
   "frontend"
 );
 
-// ---------- 1. Excalidraw bundle 默认语言 → zh-CN + 右上角 UI 文本中文化 ----------
-const BUNDLE = path.join(FRONTEND, "assets", "index-DBs1chWU.js");
+// ---------- 1. Excalidraw bundle 语言补丁（默认英文 + localStorage 中文覆盖） ----------
+// bundle 文件名含内容哈希，依赖升级后会变化：自动匹配 assets/index-*.js 主包
+// （主入口恒为 index-*.js；若同名多个取体积最大者）
+function findBundle() {
+  const dir = path.join(FRONTEND, "assets");
+  if (!fs.existsSync(dir)) return null;
+  const cands = fs
+    .readdirSync(dir)
+    .filter((f) => /^index-[A-Za-z0-9_-]+\.js$/.test(f))
+    .map((f) => path.join(dir, f));
+  if (!cands.length) return null;
+  return cands.reduce((a, b) =>
+    fs.statSync(b).size > fs.statSync(a).size ? b : a
+  );
+}
+const BUNDLE = findBundle();
 const OLD_VH = `vh={code:"en",label:"English"}`;
 const NEW_VH =
   `vh=(localStorage.getItem("excalidraw-canvas-lang")!=="zh-CN"` +
@@ -162,11 +181,51 @@ function patchTitle() {
     return false;
   }
   fs.writeFileSync(INDEX_HTML, html.replace(OLD_TITLE, NEW_TITLE), "utf8");
-  console.log("[patch-i18n] 页面标题已设为中文（浏览器标签页）");
+  console.log("[patch-i18n] 页面标题已更新（静态英文，加载后按语言动态覆盖）");
+  return true;
+}
+
+// ---------- 1c. index.html 语言引导脚本：cookie 偏好 → localStorage ----------
+// localStorage 按 origin（协议+主机+端口）隔离：localhost:5001 / 127.0.0.1:5001 /
+// :5003 认证入口互不共享；cookie 不区分端口。本脚本在主 bundle（defer 的
+// module 脚本）执行前运行，把 cookie 语言偏好同步进当前入口的 localStorage，
+// bundle 内现有 localStorage 读取逻辑即可跨入口生效（默认仍为英文）。
+const LANG_BOOTSTRAP_MARKER = "lang-cookie-bootstrap";
+const LANG_BOOTSTRAP =
+  '<script>/* ' + LANG_BOOTSTRAP_MARKER + ": cookie -> localStorage */" +
+  "try{var m=document.cookie.match(/(?:^|;\\s*)excalidraw-canvas-lang=(en|zh-CN)(?:;|$)/);" +
+  'if(m){var ls=null;try{ls=localStorage.getItem("excalidraw-canvas-lang")}catch(e){}' +
+  'if(ls!==m[1]){try{localStorage.setItem("excalidraw-canvas-lang",m[1])}catch(e){}}}' +
+  "}catch(e){}</script>";
+
+function patchLangBootstrap() {
+  if (!fs.existsSync(INDEX_HTML)) {
+    console.error(`[patch-i18n] 未找到 index.html: ${INDEX_HTML}`);
+    return false;
+  }
+  let html = fs.readFileSync(INDEX_HTML, "utf8");
+  if (html.includes(LANG_BOOTSTRAP_MARKER)) {
+    console.log("[patch-i18n] 语言引导脚本已存在，跳过");
+    return true;
+  }
+  if (!html.includes("<head>")) {
+    console.error("[patch-i18n] 未找到 <head> 锚点，请人工检查 index.html");
+    return false;
+  }
+  fs.writeFileSync(
+    INDEX_HTML,
+    html.replace("<head>", "<head>\n    " + LANG_BOOTSTRAP),
+    "utf8"
+  );
+  console.log("[patch-i18n] 已注入语言引导脚本（cookie → localStorage，跨端口保持语言偏好）");
   return true;
 }
 
 function patchBundle() {
+  if (!BUNDLE) {
+    console.error("[patch-i18n] 未在 assets/ 下找到 index-*.js 主 bundle");
+    return false;
+  }
   if (!fs.existsSync(BUNDLE)) {
     console.error(`[patch-i18n] 未找到 bundle: ${BUNDLE}`);
     return false;
@@ -240,7 +299,7 @@ function syncInjection() {
 
 // ---------- 3. 升级 PWA 缓存版本（已安装客户端强制刷新 bundle/注入脚本） ----------
 // 每次 patch 内容变更（文本替换/注入脚本更新）后需提升目标版本
-const TARGET_SW_VER = 11;
+const TARGET_SW_VER = 12;
 function bumpSwCache() {
   const sw = path.join(FRONTEND, "sw.js");
   if (!fs.existsSync(sw)) return true; // 未启用 PWA 则跳过
@@ -265,5 +324,6 @@ const ok1 = patchBundle();
 const ok2 = syncInjection();
 const ok3 = bumpSwCache();
 const ok4 = patchTitle();
-if (!ok1 || !ok2 || !ok3 || !ok4) process.exit(1);
+const ok5 = patchLangBootstrap();
+if (!ok1 || !ok2 || !ok3 || !ok4 || !ok5) process.exit(1);
 console.log("[patch-i18n] 完成");

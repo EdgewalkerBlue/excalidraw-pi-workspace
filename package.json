@@ -12,7 +12,7 @@
     "start": "vite preview --host 0.0.0.0 --port 5002"
   },
   "dependencies": {
-    "@excalidraw/excalidraw": "^0.18.1",
+    "@excalidraw/excalidraw": "0.18.0-afa3a65",
     "mcp-excalidraw-server": "^2.0.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
@@ -27,6 +27,10 @@
   "overrides": {
     "lodash-es": "4.18.1",
     "dompurify": "^3.4.14",
-    "nanoid": "5.1.16"
+    "nanoid": "5.1.16",
+    "qs": "^6.16.0",
+    "mcp-excalidraw-server": {
+      "@excalidraw/mermaid-to-excalidraw": "^2.2.2"
+    }
   }
 }
