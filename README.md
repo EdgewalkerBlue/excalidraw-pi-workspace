@@ -1,292 +1,206 @@
-English | [简体中文](README_ZH.md)
+**[English](README.md)** · [简体中文](README_ZH.md) — this README is the primary English version; `README_ZH.md` is its Chinese mirror.
+
+> ### 一键部署 / One-click deploy
+>
+> Windows: run **`deploy.bat`** (install deps → build canvas → start services → opens `http://localhost:5001`).
+> Equivalent commands:
+>
+> ```bash
+> git clone https://github.com/EdgewalkerBlue/excalidraw-pi-workspace.git
+> cd excalidraw-pi-workspace
+> npm install && npm run build:canvas && start-canvas.bat
+> ```
+>
+> Only the :5001 canvas is required. See [Quick Start](#quick-start) for auth mode and the Pi extension.
 
 # Excalidraw × Pi Agent Bidirectional Collaboration Workspace
 
-> A browser-accessible Excalidraw infinite canvas, wired to the Pi Coding Agent into a bidirectional collaboration loop via MCP (CLI) + Review Gate.
-> The canvas is structured requirements/architecture data; Arrow Binding is the core semantics.
+> **GitHub About** — *Bidirectional Excalidraw ⇄ AI workspace: draw structured requirements on an official-master Excalidraw infinite canvas, send them to the Pi Coding Agent via MCP CLI + Review Gate, and write the results back onto the canvas.*
+>
+> Topics: `excalidraw` · `mcp` · `model-context-protocol` · `ai-agent` · `infinite-canvas` · `react` · `typescript` · `pwa` · `human-ai-collaboration`
 
-## Project Overview
+A self-hosted Excalidraw infinite canvas that turns drawings into **executable requirements**: node + Arrow Binding structures on the canvas are sent to the Pi Coding Agent in one click, gated by Approve / Reject + Review Gate, executed, and written back onto the canvas.
 
-This project turns the Excalidraw infinite canvas into a **visual requirements & architecture workbench** for the Pi Coding Agent: express tasks and structures as nodes with Arrow Bindings on the canvas, send them to the AI agent in one click, and after Approve / Reject and a Review Gate check the agent executes automatically and writes results back to the canvas — a **bidirectional human-AI collaboration loop**.
+- **Canvas as structured data** — the agent reads/writes elements over MCP CLI (describe/add/update/delete/export/import); Arrow Bindings carry the semantics
+- **Persisted and collaborative** — server-side persistence with rotating backups, WebSocket live sync across devices
+- **Browser-first** — touch/stylus friendly, installable PWA, works from desktop / tablet / phone browsers
+- **For whom** — solo developers and small teams who want "sketching" to become "executable requirements"
 
-- **Canvas as structured data**: the agent reads/writes elements over MCP (CLI) — describe/add/update/delete/export/import; the Pi extension receives live notifications and auto-triggers execution
-- **Canvas persistence**: element changes are auto-persisted with rotating backups before overwrite (20 kept); `.excalidraw` archives per project (local assets, not committed to Git — `*.excalidraw` is ignored)
-- **Multi-device browser access**: touch/stylus optimized, installable PWA; works in desktop, tablet and phone browsers; UI defaults to English with switchable Simplified Chinese (remembered across entries)
-- **For whom**: solo developers and small teams who want to turn "sketching" into "executable requirements"
-
-**Port layout**:
-
-| Port | Service | Purpose |
+| Port | Service | Notes |
 |---|---|---|
-| 5001 | Canvas Server | mcp-excalidraw-server canvas service (collaboration anchor, binds 0.0.0.0 by default) |
-| 5002 | Workspace UI | Standalone Vite app (`npm run dev` / `npm start`, strictPort) |
-| 5003 | Auth proxy (optional) | Basic Auth + WebSocket forwarding, entry for public/untrusted networks |
-| 5010 | agent-notify | Notification service (Send / Approve / Reject mark files) |
-
-## Table of Contents
-
-- [Project Overview](#project-overview)
-- [Architecture](#architecture)
-- [Feature List](#feature-list)
-- [Directory Layout](#directory-layout)
-- [Upstream Dependencies](#upstream-dependencies)
-- [Quick Start](#quick-start)
-- [Collaboration Workflow](#collaboration-workflow)
-  - [Send to Task Set](#send-to-task-setcanvas-tasks--project-task-set)
-  - [Send to Agent](#send-to-agent)
-  - [Approve / Reject](#approve--reject)
-  - [Review Gate](#review-gate)
-- [Pi Extension (Live Notifications)](#pi-extension-live-notifications)
-- [Security Notes](#security-notes)
-- [Services & Common Commands](#services--common-commands)
+| 5001 | Canvas Server | `mcp-excalidraw-server`, collaboration anchor (binds `0.0.0.0`) |
+| 5002 | Workspace UI | Standalone Vite app, thin official shell (no autosave) |
+| 5003 | Auth proxy (optional) | Basic Auth + WebSocket forwarding for untrusted networks |
+| 5004 | canvas-web dev server | `npm run dev:canvas`, proxies `/api` + WS to :5001 |
+| 5010 | agent-notify | Send / Approve / Reject mark files |
 
 ## Architecture
 
 ```
 ┌────────────────────────────┐        ┌───────────────────────────────┐
-│  Web browser               │        │  Local host (Windows)         │
-│  Excalidraw canvas         │        │                               │
-│  [Send to Agent][Approve]  │        │  ┌─────────────────────────┐  │
-│  [Reject] ●Connected       │        │  │ Canvas Server :5001     │  │
-└──────────┬─────────────────┘        │  │ (mcp-excalidraw-server) │  │
-           │ WebSocket live sync      │  └───────────┬─────────────┘  │
-           │ (LAN, no auth)           │              │ REST /api      │
-           ▼                          │  ┌───────────▼─────────────┐  │
-    http://<LAN-IP>:5001              │  │ agent-notify :5010      │  │
-                                      │  │ (mark files .agent/*.json)│ │
-                                      │  └───────────┬─────────────┘  │
+│  Browser                   │        │  Host (Windows)               │
+│  Excalidraw canvas         │        │  ┌─────────────────────────┐  │
+│  [Send to Agent][Approve]  │        │  │ Canvas Server :5001     │  │
+│  [Reject] ●Connected       │        │  └───────────┬─────────────┘  │
+└──────────┬─────────────────┘        │              │ REST /api      │
+           │ WebSocket live sync      │  ┌───────────▼─────────────┐  │
+           │ (LAN, no auth)           │  │ agent-notify :5010      │  │
+           ▼                          │  │ (.agent/*.json marks)   │  │
+    http://<LAN-IP>:5001              │  └───────────┬─────────────┘  │
                                       │              │ file watcher   │
                                       │  ┌───────────▼─────────────┐  │
-                                      │  │ Pi Agent (0.84.4)       │  │
-                                      │  │  ├ ext: notify + auto   │  │
+                                      │  │ Pi Agent + extension    │  │
+                                      │  │  ├ notify + auto-trigger│  │
                                       │  │  └ CLI bridge (mcp-cli) │  │
                                       │  └───────────┬─────────────┘  │
                                       │              │                │
                                       │  ┌───────────▼─────────────┐  │
                                       │  │ Git repository          │  │
-                                      │  │  modules/ (Pi code)     │  │
-                                      │  │  tools/ webui/ docs     │  │
+                                      │  │  modules/ (agent code)  │  │
                                       │  └─────────────────────────┘  │
                                       └───────────────────────────────┘
 ```
 
-**Data flow (one full collaboration round)**:
+## Features
 
-```
-Browser canvas (nodes + arrow bindings)
-  → [Send to Agent]   → save canvas snapshot + notify Pi (.agent/pending.json)
-  → [Approve]         → write approval mark (.agent/approved.json)
-  → Pi auto-executes  → read canvas → Review Gate → run tasks
-  → MCP write-back    → add/update nodes, arrows, task status (live sync to browser)
-  → export archive    → architecture/*.excalidraw local snapshot (not in Git)
-  → clear marks       → Web UI buttons reset, loop closed
-```
-
-## Feature List
-
-| Capability | Description |
+| Capability | Notes |
 |---|---|
-| Infinite canvas | Full Excalidraw feature set: infinite canvas, zoom/pan, touch, stylus, shapes/text/images, arrows |
-| Arrow Binding | Arrow source/target/binding/label fully preserved (structured semantics) |
-| Browser access | `http://<LAN-IP>:5001`, touch/stylus optimized, installable PWA |
-| UI language | Defaults to English; switchable to Simplified Chinese (official translations, same as excalidraw.com) with persistent memory — localStorage + cookie dual storage, effective across :5001/:5003 entries; header text follows the language |
-| Canvas persistence | Element changes auto-persisted (`canvas-store.json`) with rotating backups before overwrite (20 kept); `.excalidraw` archive per project; canvas files not committed to Git (`*.excalidraw` ignored) |
-| Send to Agent | Web UI button: send canvas notification to Pi (1s green "sent" feedback) |
-| Send to Task Set | Web UI button (left of Send to Agent): write unfinished tasks from canvas frames into each project's `.pi/task_set.json` (idempotent dedup, priority-sorted) |
-| Frame border color | Web UI palette (6 colors): update all frame border colors at once; new frames default to blue (visible on dark theme) |
-| Approve | Web UI approve button: yellow (pending) → green (approved); hidden until sent; hover warns to review seriously |
-| Reject | Web UI red reject button: roll back sent content + restore canvas snapshot + notify Pi to revert executed tasks |
-| Pi live notifications | Pi extension listens in real time, TUI popup + inbox widget, auto-triggers agent execution |
-| Review Gate | Gate protocol: change detection (node/arrow/binding diffs), task metadata, double confirmation for destructive ops |
-| MCP(CLI) bridge | Pi drives the canvas via CLI: describe/add/update/delete/export/import |
-| Auth (optional) | Basic Auth reverse proxy + WebSocket forwarding for public-network scenarios |
+| Infinite canvas | Full official Excalidraw feature set: zoom/pan, touch, stylus, shapes/text/images, arrows |
+| Arrow Binding | Source/target/binding/label preserved — the structured semantics the agent reads |
+| UI language | Follows the browser language (`zh*` → Simplified Chinese, otherwise English) through the official `langCode` prop; the toolbar button switches it and remembers the choice in `localStorage` (per origin) |
+| Persistence | Server-side save with rotating backups before overwrite (20 kept); `.excalidraw` archives stay local (`*.excalidraw` is gitignored) |
+| Send to Agent | Toolbar button → notifies Pi, green "sent" feedback |
+| Send to Task Set | Writes unfinished tasks from canvas frames into each project's `.pi/task_set.json` (dedup by title, priority-sorted) |
+| Approve / Reject | Approve (yellow → green) starts execution; Reject rolls back the sent content and restores the snapshot |
+| Pi live notifications | Extension watches marks: TUI popup + inbox widget + auto-trigger |
+| Review Gate | Pre-execution report (node/arrow diffs, scope, planned actions); destructive ops need extra confirmation — see [GATE.md](GATE.md) |
+| MCP CLI bridge | `mcp-cli.bat describe/add/update/delete/export/import` |
+| Auth (optional) | Basic Auth proxy + WebSocket forwarding |
+| Upstream self-check | Top-right badge in the canvas flags newer official builds |
+
+> **Retired 2026-09-23** when the frontend moved to `canvas-web/` (see [legacy/README.md](legacy/README.md)): the **frame border-color palette** (lived in `webui/send-to-agent.js`) and **cross-entry language memory via cookie** (lived in `tools/patch-i18n.mjs`). Language preference is now per-origin `localStorage` only.
 
 ## Directory Layout
 
 ```
 excalidraw-workspace/
-├── architecture/
-│   ├── main.excalidraw        # main architecture canvas (local snapshot, *.excalidraw not in Git)
-│   └── README.md              # data-model mapping & traceability conventions
-├── modules/auth/              # sample code produced by Pi (login module)
+├── canvas-web/                 # :5001 frontend — official Excalidraw base + secondary dev
+│   ├── public/                 # PWA assets (manifest / sw / icons)
+│   └── src/
+│       ├── CanvasApp.tsx       # official shell (onExcalidrawAPI / langCode / theme) + sync wiring
+│       ├── sync.ts             # multi-client live sync client
+│       ├── agent-tools.tsx     # Send to Agent / Approve / Reject / Send to Task Set
+│       ├── upstream-badge.tsx  # upstream update reminder
+│       └── upstream-core.mjs   # SSOT of update-check rules (shared with tools/check-upstream.mjs)
+├── src/                        # :5002 workspace UI — thin official shell
 ├── tools/
-│   ├── review-gate.mjs        # Review Gate snapshot/change detection
-│   ├── agent-notify.mjs       # notification service (:5010, mark files)
-│   ├── exec-log.mjs           # task execution log & rollback
-│   ├── patch-pwa.mjs          # Web UI PWA + button injection patch
-│   ├── patch-i18n.mjs         # Web UI language patch (default EN + zh-CN switch persistence / translations)
-│   ├── patch-server.mjs       # canvas server persist/backup patch (anti-overwrite)
-│   ├── fix-canvas-indices.mjs # canvas element index normalization (invalid index blocks new elements)
-│   ├── auth-proxy.mjs         # optional Basic Auth proxy
-│   └── pi-extensions/
-│       └── agent-notify-watch.ts  # Pi extension (live notify + auto trigger + Reject rollback)
-├── webui/
-│   └── send-to-agent.js       # Web UI button injection script (Send/Approve/Reject)
-├── start-canvas.bat           # one-click start (canvas server + agent-notify)
-├── start-auth.bat             # auth-mode one-click start (localhost-only 5001 + auth proxy :5003)
-├── mcp-cli.bat                # MCP CLI bridge wrapper
-├── GATE.md                    # Review Gate protocol
-├── SECURITY.md                # security notes
-├── README_ZH.md               # Chinese documentation (中文文档)
-└── FINAL-ACCEPTANCE.md        # final acceptance checklist
+│   ├── agent-notify.mjs        # notification service (:5010)
+│   ├── patch-server.mjs        # canvas server persistence / backup / sync-guard patch
+│   ├── check-upstream.mjs      # base-layer self-check CLI
+│   ├── review-gate.mjs         # Review Gate change detection
+│   ├── exec-log.mjs            # execution log & rollback
+│   ├── fix-canvas-indices.mjs  # element index normalization
+│   ├── auth-proxy.mjs          # optional Basic Auth proxy
+│   └── pi-extensions/agent-notify-watch.ts
+├── modules/                    # agent-produced sample code
+├── architecture/               # .excalidraw archives (local, not in Git)
+├── legacy/                     # retired implementations, see legacy/README.md
+├── UPSTREAM-DIFF.md            # diff vs excalidraw/excalidraw official master
+├── GATE.md · SECURITY.md · FINAL-ACCEPTANCE.md
+├── deploy.bat                 # one-click deploy (install -> build -> start)
+├── start-canvas.bat · start-auth.bat · mcp-cli.bat
+└── README.md · README_ZH.md
 ```
 
-## Upstream Dependencies
+## Upstream Base Layer
 
-Following the "reuse mature components first, don't build a canvas engine" principle, the core components come from upstream open-source projects:
+The canvas does **not** fork Excalidraw — it consumes the official npm build and pins the `master` snapshot it was built from. Everything outside the secondary-development surface reuses the official implementation (engine, rendering, `langCode` switching, official `index.css`).
 
-| Component | Upstream project | Version | Purpose |
+| Component | Upstream | Version | Role |
 |---|---|---|---|
-| Excalidraw canvas engine | [excalidraw/excalidraw](https://github.com/excalidraw/excalidraw) (`@excalidraw/excalidraw`) | 0.18.0-afa3a65¹ | React component, infinite canvas, touch/stylus, Arrow Binding |
-| Canvas Server + MCP + CLI | [yctimlin/mcp_excalidraw](https://github.com/yctimlin/mcp_excalidraw) (`mcp-excalidraw-server`) | 2.0.0 | Self-hosted Excalidraw Web UI + REST + WebSocket live sync; element-level CRUD; `.excalidraw` export/import; Arrow Binding preserved; structured describe |
-| Pi Coding Agent | [mariozechner/pi-coding-agent](https://github.com/mariozechner/pi-coding-agent) (`@earendil-works/pi-coding-agent`) | 0.84.4 | Agent host; extension mechanism (events/UI/custom tools) for live notifications and auto-triggering |
+| Canvas engine | [excalidraw/excalidraw](https://github.com/excalidraw/excalidraw) | `0.18.0-c0ad61c` | React component, infinite canvas, Arrow Binding |
+| Canvas Server + MCP + CLI | [mcp_excalidraw](https://github.com/yctimlin/mcp_excalidraw) | 2.0.0 | REST + WebSocket sync, element CRUD, `.excalidraw` I/O |
+| Agent host | [pi-coding-agent](https://github.com/mariozechner/pi-coding-agent) | 0.84.4 | Extension mechanism for live notify / auto-trigger |
 
-> ¹ Since 2026-09-14 the root dependency is pinned to the upstream master snapshot build `0.18.0-afa3a65` (includes the mermaid-to-excalidraw ^2.2.2 security-line adaptation); the Canvas Server frontend bundle embeds 0.18.1.
+**Baseline** (compiled into the bundle from `canvas-web/vite.config.ts`):
 
-> **Design note**: Pi 0.84.4 has no built-in MCP, so this project uses a **CLI bridge** (`mcp-excalidraw-server` CLI + REST); the in-repo extension layer adds "live notifications / auto-trigger / approve-reject / rollback" collaboration capabilities.
->
-> Original parts of this project: `webui/` (button injection), `tools/` (notification service / gate / rollback / PWA patches), the Pi extension `agent-notify-watch.ts`, and the collaboration protocols (GATE.md / SECURITY.md).
+| Item | Value |
+|---|---|
+| Baseline commit | `c0ad61c` (2026-09-16) |
+| Upstream `master` HEAD at upgrade | `2b9da96` (2026-09-22) |
+| Master commits without a published build | 4 (`14e1c61`, `97c68dd`, `31df3e6`, `2b9da96`) |
+
+> **Never align to npm `latest`.** `latest` is `0.18.1`, published 2026-04-20 — its code is ~5 months *older* than the pinned canary. The tag that tracks master is **`next`** (`0.18.0-<sha7>`). Full comparison: [UPSTREAM-DIFF.md](UPSTREAM-DIFF.md).
+
+**Self-check** — the canvas badge queries upstream `master` + npm dist-tags once per 24h and shows three states: `✓ up to date` (grey), `source ahead N` (yellow, no build published yet), `new build <version>` (yellow; click to copy the upgrade command). Offline: silent. The CLI adds *baseline drift* detection (declared `__CANVAS_BASELINE__` ≠ installed version):
+
+```bash
+npm run check:upstream          # exit 1 = upgrade available or baseline drifted
+```
+
+To upgrade: `npm install @excalidraw/excalidraw@<version>` → sync `__CANVAS_BASELINE__` in `canvas-web/vite.config.ts` → `npm run build:canvas` → restart the canvas.
 
 ## Quick Start
 
-### Requirements
-
-- Windows 10/11 (verified on Windows 11), Node.js ≥ 20 (22 in use), Git
-- Optional: browsers on other LAN devices (tablet/phone touch or stylus input)
-
-### Install & Run
+**Requirements**: Windows 10/11, Node.js ≥ 20 (22 in use), Git. Optional: browsers on LAN devices.
 
 ```bash
-# 1. Install dependencies
+# 1. Install
 npm install
 
-# 2. Start services (canvas server :5001 + agent-notify :5010)
-#    The start script auto-applies i18n / server patches (idempotent)
+# 2. Start canvas server (:5001) + agent-notify (:5010); applies the persistence patch
+#    (deploy.bat does steps 1-2 in one shot)
 start-canvas.bat
-# Or start separately:
-#   PORT=5001 HOST=0.0.0.0 node node_modules/mcp-excalidraw-server/dist/server.js
-#   node tools/agent-notify.mjs
+#   manually: PORT=5001 HOST=0.0.0.0 node node_modules/mcp-excalidraw-server/dist/server.js
+#             node tools/agent-notify.mjs
 
-# 2a. Public/untrusted network: auth mode (canvas binds 127.0.0.1, Basic Auth proxy on :5003)
-start-auth.bat          # first run auto-generates a random strong password in .auth.env (gitignored)
+# 2a. Untrusted network: auth mode (canvas binds 127.0.0.1, proxy on :5003)
+start-auth.bat          # first run generates a random password in .auth.env (gitignored)
 
-# 2b. Workspace UI (optional, standalone Vite app, port :5002, does not occupy 5001)
-npm run dev        # http://localhost:5002 (hot reload while editing src/)
-npm run build && npm start   # production preview, also on :5002 (npm start = npm run preview)
+# 2b. Optional standalone shell (:5002) — no autosave, use File → Save as
+npm run dev
 
-# 3. Install the Pi extension (live notifications + auto execution)
-copy tools\pi-extensions\agent-notify-watch.ts %USERPROFILE%\.pi\agent\extensions\
-# Run /reload inside Pi
+# 3. Install the Pi extension, then /reload inside Pi
+copy tools\pi-extensions\agent-notify-watch.ts %USERPROFILE%\.pi\agent\extensions\automation\
 
-# 4. Patch the Web UI (PWA + Send/Approve/Reject buttons)
-node tools/patch-pwa.mjs
-
-# 5. Open in a browser (desktop / tablet / phone all work)
-#    http://<LAN-IP>:5001   (replace with your LAN IP)
+# 4. Open http://<LAN-IP>:5001 (desktop / tablet / phone)
 ```
 
-### Firewall (LAN access)
-
-Admin CMD:
+Firewall (admin CMD) — allow only your LAN segment:
 
 ```bat
-rem Replace <LAN-CIDR> with your LAN segment (CIDR notation)
 netsh advfirewall firewall add rule name="Excalidraw Workspace 5001" dir=in action=allow protocol=TCP localport=5001 remoteip=<LAN-CIDR>
 ```
 
 ## Collaboration Workflow
 
-### Send to Task Set (canvas tasks → project task set)
+- **Send to Task Set** — box each project with the frame tool (frame name = project name), add tasks inside; a leading `P0`–`P3` sets priority, `✓`/`已完成` marks done (skipped). The button keeps unfinished items only, dedups by title, appends `T-date-seq` ids.
+- **Send to Agent** — sketch, then click the blue button: notifies Pi and saves a snapshot.
+- **Approve / Reject** — both appear after Send. Approve starts execution (hover warns to review first); Reject rolls back the sent content, restores the snapshot, and tells Pi to revert.
+- **Review Gate** — before execution Pi produces a gate report; destructive operations need extra confirmation. See [GATE.md](GATE.md).
 
-1. On the canvas, use the **frame tool** to box each project area; **frame name = project name** (e.g. `excalidraw-workspace`, mapped to `<project-root>/.pi/task_set.json`; absolute paths also supported)
-2. Add text tasks inside the frame: a leading `P0`–`P3` sets priority (default P2); a leading `✓`/`已完成` (done) marks completion (skipped automatically)
-3. Click **Send to Task Set**:
-   - Write rule: **keep unfinished items only** — tasks already marked "done" in the target task set are removed;
-   - Unfinished canvas tasks are deduplicated by title and appended with `T-date-seq` ids, status "pending", stable priority ordering
-
-### Send to Agent
-
-1. Sketch the task on the canvas (nodes + arrow bindings)
-2. Click **Send to Agent** (blue): notifies Pi and saves a canvas snapshot; the button briefly shows a green "sent" state
-3. Pi receives the notification live (extension popup 📮 + inbox widget)
-
-### Approve / Reject
-
-- **Approve** (shown after Send, yellow): approves the canvas tasks; hover warns "please review the canvas content seriously before executing"; turns green on click and Pi starts automatically
-- **Reject** (shown after Send, red): rolls back the sent content, restores the canvas snapshot, and notifies Pi to stop and revert executed file changes (`exec-log.mjs rollback`)
-- Both buttons are hidden until something is sent
-
-### Review Gate
-
-Before execution, Pi generates a gate report: canvas statistics (nodes/arrows/bindings), node diffs, task scope, target repo/branch, planned actions. Destructive operations (bulk delete / force push / production changes, etc.) require extra human confirmation. See [GATE.md](GATE.md).
-
-## Pi Extension (Live Notifications)
-
-`agent-notify-watch.ts` is a Pi global extension (`~/.pi/agent/extensions/automation/`, organized into category suites since 2026-09-12) providing:
-
-- **Live notifications**: watches `.agent/*.json` marks, Pi TUI popup + top inbox widget
-- **Auto-trigger**: on an approval mark, drives the agent via `pi.sendUserMessage()` to execute canvas tasks (no manual prompt needed)
-- **Reject handling**: on a reject mark, notifies the agent to stop the task and roll back
-
-```
-Install:  copy tools\pi-extensions\agent-notify-watch.ts %USERPROFILE%\.pi\agent\extensions\
-Activate: /reload inside Pi
-Command:  /agent-inbox (manually refresh the inbox)
-```
-
-## Security Notes
-
-- The canvas server API has no built-in auth; it binds to the LAN by default (firewall allows only the <LAN segment>)
-- Public exposure must enable the auth proxy (`tools/auth-proxy.mjs`, Basic Auth + WebSocket forwarding) plus HTTPS
-- Destructive operations (bulk delete, force push, production changes, system-level config, project/canvas deletion) require Review Gate double confirmation
-- See [SECURITY.md](SECURITY.md)
-
-## Services & Common Commands
+## Commands
 
 ```bash
-# Start
-start-canvas.bat                          # canvas server(:5001) + agent-notify(:5010)
-npm run dev                               # workspace UI (:5002, separate from Canvas Server, can run simultaneously)
-
-# Pi canvas operations (CLI bridge)
-mcp-cli.bat describe                      # structured canvas read (incl. Connections/Binding)
-mcp-cli.bat add                           # create elements (stdin JSON)
-mcp-cli.bat update <id> --set '{...}'     # update an element
-mcp-cli.bat delete <id...>                # delete elements
-mcp-cli.bat export --out architecture/main.excalidraw   # export archive (local snapshot)
-mcp-cli.bat import architecture/main.excalidraw         # import / restore
-
-# Review Gate
+npm run typecheck      # tsc over src/ and canvas-web/src
+npm run build:canvas   # rebuild canvas-web into the Canvas Server static dir
+npm run dev:canvas     # canvas-web dev server on :5004
+mcp-cli.bat describe | add | update <id> --set '{...}' | delete <id...>
+mcp-cli.bat export --out architecture/main.excalidraw   # local snapshot
 node tools/review-gate.mjs --task "..." --planned "..." [--destructive]
-
-# Task rollback (on Reject)
-node tools/exec-log.mjs list              # view execution log
-node tools/exec-log.mjs rollback          # roll back all records
-
-# Web UI patch (PWA + buttons)
-node tools/patch-pwa.mjs
-
-# Web UI patch (language-switch persistence + floating language switcher; auto-run by start-canvas.bat / start-auth.bat;
-# re-run after upgrading mcp-excalidraw-server)
-node tools/patch-i18n.mjs
-
-# Canvas server persist/backup patch (anti-overwrite; auto-run by start-canvas.bat)
-node tools/patch-server.mjs
-
-# Canvas index normalization (invalid/uppercase indices block new elements in Excalidraw)
-node tools/fix-canvas-indices.mjs --server http://127.0.0.1:5001   # one-click fix of the live canvas
-node tools/fix-canvas-indices.mjs <input.json> <output.json>       # fix local .excalidraw/backup files
+node tools/exec-log.mjs list | rollback                 # execution log / rollback
+node tools/patch-server.mjs                             # persistence patch (auto-run on start)
+node tools/fix-canvas-indices.mjs --server http://127.0.0.1:5001
 ```
+
+## Security
+
+- The canvas API has **no built-in auth** and binds to the LAN — restrict with a firewall rule, or put it behind the auth proxy (+ HTTPS) when exposed
+- Destructive operations require Review Gate double confirmation
+- See [SECURITY.md](SECURITY.md)
 
 ## License
 
-Released under the [MIT](LICENSE) license. 本项目基于 [MIT](LICENSE) 协议开源。
+[MIT](LICENSE). Upstream components are all MIT: Excalidraw, mcp_excalidraw, pi-coding-agent, React, Vite.
 
-Upstream components (all MIT):
-
-- [Excalidraw](https://github.com/excalidraw/excalidraw) (`@excalidraw/excalidraw`)
-- [mcp_excalidraw](https://github.com/yctimlin/mcp_excalidraw) (`mcp-excalidraw-server`)
-- [pi-coding-agent](https://github.com/mariozechner/pi-coding-agent) (`@earendil-works/pi-coding-agent`)
-- React / Vite
-
-> Note: Excalidraw's MIT license carries a trademark clause — the "Excalidraw" name and logo may not be used for promotion/marketing without permission.
+> Excalidraw's MIT license carries a trademark clause — the "Excalidraw" name and logo may not be used for promotion/marketing without permission.
