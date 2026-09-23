@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build:canvas": "vite build --config canvas-web/vite.config.ts",
     "check:upstream": "node tools/check-upstream.mjs",
+    "ship": "ship.bat",
     "preview": "vite preview --host 0.0.0.0 --port 5002",
     "start": "vite preview --host 0.0.0.0 --port 5002"
   },
