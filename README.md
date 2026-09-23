@@ -185,6 +185,7 @@ netsh advfirewall firewall add rule name="Excalidraw Workspace 5001" dir=in acti
 npm run typecheck      # tsc over src/ and canvas-web/src
 npm run build:canvas   # rebuild canvas-web into the Canvas Server static dir
 npm run dev:canvas     # canvas-web dev server on :5004
+npm run ship -- -m "feat: xxx"   # commit -> push DEV -> merge master -> auto-return to DEV
 mcp-cli.bat describe | add | update <id> --set '{...}' | delete <id...>
 mcp-cli.bat export --out architecture/main.excalidraw   # local snapshot
 node tools/review-gate.mjs --task "..." --planned "..." [--destructive]
@@ -192,6 +193,17 @@ node tools/exec-log.mjs list | rollback                 # execution log / rollba
 node tools/patch-server.mjs                             # persistence patch (auto-run on start)
 node tools/fix-canvas-indices.mjs --server http://127.0.0.1:5001
 ```
+
+## Branching & Release Flow
+
+Development happens on **`DEV`**; `master` is the release branch (the repo's default branch). One command runs the whole cycle — commit, push `DEV`, merge into `master`, and **always switch back to `DEV`** (guaranteed even if a step fails):
+
+```bash
+npm run ship -- -m "feat: xxx"      # or: ship.bat -m "feat: xxx"  /  bash tools/ship.sh -m "feat: xxx"
+npm run ship -- -m "xxx" --dry-run  # print the git commands without running them
+```
+
+`tools/ship.sh` is the single source of truth (POSIX sh; `ship.bat` is only a launcher that locates Git Bash). It refuses to run outside `DEV`, excludes local-only paths (`.pi/`, `exp-*.json`) from the commit, and retries a failed push over a direct connection when a stale proxy is configured.
 
 ## Security
 

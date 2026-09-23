@@ -185,6 +185,7 @@ netsh advfirewall firewall add rule name="Excalidraw Workspace 5001" dir=in acti
 npm run typecheck      # tsc 覆盖 src/ 与 canvas-web/src
 npm run build:canvas   # 重建 canvas-web 到 Canvas Server 静态目录
 npm run dev:canvas     # canvas-web 开发服务器（:5004）
+npm run ship -- -m "feat: xxx"   # 提交 → 推 DEV → 合并 master → 自动切回 DEV
 mcp-cli.bat describe | add | update <id> --set '{...}' | delete <id...>
 mcp-cli.bat export --out architecture/main.excalidraw   # 本地快照
 node tools/review-gate.mjs --task "..." --planned "..." [--destructive]
@@ -192,6 +193,17 @@ node tools/exec-log.mjs list | rollback                 # 执行日志 / 回滚
 node tools/patch-server.mjs                             # 落盘补丁（启动时自动执行）
 node tools/fix-canvas-indices.mjs --server http://127.0.0.1:5001
 ```
+
+## 分支与发布流程
+
+开发固定在 **`DEV`** 分支；`master` 是发布分支（也是仓库默认分支）。一条命令跑完整套流程 —— 提交、推 `DEV`、合并进 `master`，并**始终切回 `DEV`**（即使中途失败也保证回切）：
+
+```bash
+npm run ship -- -m "feat: xxx"      # 或：ship.bat -m "feat: xxx"  /  bash tools/ship.sh -m "feat: xxx"
+npm run ship -- -m "xxx" --dry-run  # 只打印将要执行的 git 命令
+```
+
+`tools/ship.sh` 是唯一实现（POSIX sh；`ship.bat` 只是定位 Git Bash 的启动器）。它会拒绝在 `DEV` 之外运行、把本机专属路径（`.pi/`、`exp-*.json`）排除在提交之外，并在检测到失效代理导致推送失败时自动改用直连重试。
 
 ## 安全
 
