@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite",
     "dev:canvas": "vite --config canvas-web/vite.config.ts",
-    "test": "node --test modules/auth/login.test.js",
+    "test": "node --test modules/auth/login.test.js canvas-web/src/upstream-core.test.mjs",
     "build": "npm run build:canvas",
     "build:workspace": "tsc -b && vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",

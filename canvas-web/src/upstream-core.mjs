@@ -1,10 +1,11 @@
 // 单一事实来源（SSOT）：画布底层「官方 Excalidraw master 更新自检」的端点与判定逻辑。
 //
-// 同时被两处复用，避免各写一份规则（违反项目 MCG-002/004）：
+// 同时被三处复用，避免各写一份规则（违反项目 MCG-002/004）：
 //   1. canvas-web/src/upstream-badge.tsx —— 浏览器端自检，画布 WebUI 顶部提醒
 //   2. tools/check-upstream.mjs          —— 本地 / CI 命令行检查（npm run check:upstream）
+//   3. canvas-web/src/upstream-core.test.mjs —— 纯逻辑单测（合成数据，不碰网络）
 //
-// 约定：本文件必须是纯逻辑（无网络、无 DOM），才能两边共享。网络请求由调用方完成，
+// 约定：本文件必须是纯逻辑（无网络、无 DOM），才能三边共享。网络请求由调用方完成，
 // 结果以 raw 对象传入 assess()。
 
 /** 上游仓库与 npm 端点 */
@@ -18,34 +19,56 @@ export const UPSTREAM_ENDPOINTS = {
 /** 检查节流周期（浏览器侧） */
 export const CHECK_INTERVAL = 24 * 3600 * 1000;
 
+/** 官方跟随 master 的 dist-tag；canary 版本形如 0.18.0-<sha7> */
+export const CANARY_TAG = "next";
 const CANARY_RE = /^0\.18\.0-([0-9a-f]{7})$/i;
 
 /**
  * 从 npm dist-tags 中挑出「官方最新已发布构建」。
- * 注意：Excalidraw 的 `latest` 稳定版常年滞后（0.18.1 发布于 2026-04，远早于同期 master canary），
- * 真正跟随 master 的是 `next`（0.18.0-<sha7>），因此优先取 next。
+ *
+ * 规则（与实现严格一致）：
+ *   1. **显式优先 `next`** —— Excalidraw 的 `latest` 稳定版常年滞后（0.18.1 发布于 2026-04，
+ *      远早于同期 master canary），真正跟随 master 的只有 `next`（0.18.0-<sha7>）；
+ *   2. `next` 若非 canary 形式，则在其余标签中按 registry 返回顺序取第一个 canary 形式者；
+ *   3. 都没有则回退 `latest`（sha 为 null，仅用于展示，不代表可升级）。
+ *
  * @param {Record<string,string>} tags
  * @returns {{version: string, sha: string|null, tag: string}}
  */
 export function pickLatestBuild(tags) {
-  const entries = Object.entries(tags || {});
-  const canary = entries.find(([, v]) => CANARY_RE.test(String(v)));
+  const t = tags || {};
+  const ordered = t[CANARY_TAG] ? [[CANARY_TAG, t[CANARY_TAG]], ...Object.entries(t).filter(([k]) => k !== CANARY_TAG)] : Object.entries(t);
+  const canary = ordered.find(([, v]) => CANARY_RE.test(String(v)));
   if (canary) {
     const sha = String(canary[1]).match(CANARY_RE)[1].toLowerCase();
     return { version: canary[1], sha, tag: canary[0] };
   }
-  return { version: tags?.latest || "", sha: null, tag: "latest" };
+  return { version: t.latest || "", sha: null, tag: "latest" };
+}
+
+/** 把 GitHub 的限流重置时间（epoch 秒 / 毫秒 / ISO 串）格式化成本地 HH:MM */
+export function formatReset(resetAt) {
+  if (!resetAt) return "";
+  const num = typeof resetAt === "number" ? (resetAt < 1e12 ? resetAt * 1000 : resetAt) : Date.parse(String(resetAt));
+  if (!num || Number.isNaN(num)) return "";
+  const d = new Date(num);
+  const p = (n) => String(n).padStart(2, "0");
+  return `${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 /**
  * 比对「构建基线」与「上游现状」，给出提醒状态与文案。
  *
  * @param {{commit:string,date:string,version?:string}} baseline 构建期注入的官方 master 快照点
- * @param {{master?:{sha:string,date:string}, compare?:{total_commits:number,commits:{sha:string}[]}, tags?:Record<string,string>}} fetched 原始接口数据
- * @returns {{state:'unknown'|'up-to-date'|'build-available'|'source-only',
+ * @param {{master?:{sha:string,date:string},
+ *          compare?:{total_commits:number,commits:{sha:string}[]},
+ *          tags?:Record<string,string>,
+ *          blocked?:{status?:number,resetAt?:number|string}}} fetched 原始接口数据；
+ *        blocked 由调用方在收到 403/429 时传入（GitHub 未认证限流）
+ * @returns {{state:'unknown'|'up-to-date'|'build-available'|'source-only'|'rate-limited',
  *            baseline:*, masterSha:string, masterDate:string, behindBy:number,
- *            build:ReturnType<typeof pickLatestBuild>, title:{zh:string,en:string}, short:{zh:string,en:string},
- *            command:string}}
+ *            build:ReturnType<typeof pickLatestBuild>, resetAt:number, resetLabel:string,
+ *            title:{zh:string,en:string}, short:{zh:string,en:string}, command:string}}
  */
 export function assess(baseline, fetched = {}) {
   const baseCommit = String(baseline?.commit || "").toLowerCase();
@@ -56,13 +79,29 @@ export function assess(baseline, fetched = {}) {
     Number(fetched?.compare?.total_commits) || (commits.length ? commits.length : masterSha && masterSha !== baseCommit ? 1 : 0);
   const aheadShas = new Set(commits.map((c) => String(c.sha).slice(0, 7).toLowerCase()));
   const build = pickLatestBuild(fetched?.tags);
+  const blocked = fetched?.blocked;
+  const resetLabel = formatReset(blocked?.resetAt);
+  const resetAt = typeof blocked?.resetAt === "number"
+    ? (blocked.resetAt < 1e12 ? blocked.resetAt * 1000 : blocked.resetAt)
+    : (blocked?.resetAt ? Date.parse(String(blocked.resetAt)) || 0 : 0);
 
   const result = {
-    baseline, masterSha, masterDate, behindBy, build,
+    baseline, masterSha, masterDate, behindBy, build, resetAt, resetLabel,
     state: "unknown", title: { zh: "", en: "" }, short: { zh: "", en: "" }, command: "",
   };
 
-  if (!masterSha) return result; // 离线 / 被限流：静默
+  if (!masterSha) {
+    // 拿不到上游 HEAD：区分「被限流」与「真离线」——前者要给用户可见解释，后者保持静默
+    if (blocked) {
+      result.state = "rate-limited";
+      result.short = { zh: "自检被限流", en: "self-check limited" };
+      result.title = {
+        zh: `GitHub API 暂时拒绝了自检请求（HTTP ${blocked.status ?? "?"}）。未认证接口的限额是每 IP 每小时 60 次，完成一次自检要 2 次请求。\n${resetLabel ? `配额约在 ${resetLabel} 重置，届时会自动重试。` : "稍后会自动重试。"}\n画布功能不受影响，只是暂时无法比对官方 master 的更新。`,
+        en: `GitHub API temporarily refused the self-check (HTTP ${blocked.status ?? "?"}). The unauthenticated limit is 60 requests/hour per IP, and one check costs 2.\n${resetLabel ? `Quota resets around ${resetLabel}; it will retry automatically.` : "It will retry automatically later."}\nThe canvas itself is unaffected — only the upstream comparison is paused.`,
+      };
+    }
+    return result;
+  }
 
   const baseLabel = `${baseline.commit}${baseline.date ? ` (${baseline.date})` : ""}`;
   const headLabel = `${masterSha}${masterDate ? ` (${masterDate})` : ""}`;

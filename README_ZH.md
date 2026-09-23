@@ -132,11 +132,13 @@ excalidraw-workspace/
 
 > **不要用 npm `latest` 对齐。** `latest` 是 `0.18.1`，发布于 2026-04-20，代码比当前 canary 旧约 5 个月。跟随 master 的是 dist-tag **`next`**（`0.18.0-<sha7>`）。完整对比见 [UPSTREAM-DIFF.md](UPSTREAM-DIFF.md)。
 
-**自检** —— 画布徽标每 24h 查一次上游 `master` 与 npm dist-tags，三态：`✓ 官方最新`（灰）、`源码领先 N`（黄，尚未发包）、`官方新构建 <版本>`（黄，点击复制升级命令）；离线静默。命令行版额外检测**基线漂移**（声明的 `__CANVAS_BASELINE__` 与实际安装版本不一致）：
+**自检** —— 画布徽标每 24h 查一次上游 `master` 与 npm dist-tags，共四态：`✓ 官方最新`（灰）、`源码领先 N`（黄，尚未发包）、`官方新构建 <版本>`（黄，点击复制升级命令）、`⏳ 自检被限流，HH:MM 后重试`（灰）。真正的网络故障保持静默，但 GitHub 未认证接口的限流（每 IP 每小时 60 次，一次自检消耗 2 次）会**显式提示而不是让徽标消失**；配额耗尽期间不再发请求。命令行版额外检测**基线漂移**（声明的 `__CANVAS_BASELINE__` 与实际安装版本不一致）：
 
 ```bash
 npm run check:upstream          # 退出码 1 = 有可升级项或发生漂移
 ```
+
+判定规则有单测覆盖（用合成 API 数据，含限流分支与「本地 pin 比已发布构建更新」的误报防护）：`npm test`（见 `canvas-web/src/upstream-core.test.mjs`）。
 
 升级步骤：`npm install @excalidraw/excalidraw@<版本>` → 同步 `canvas-web/vite.config.ts` 里的 `__CANVAS_BASELINE__` → `npm run build:canvas` → 重启画布。
 

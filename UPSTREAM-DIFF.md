@@ -111,6 +111,24 @@ npm run build:canvas
 
 ## 5. 自检机制
 
-- **浏览器（默认）**：`UpstreamBadge` 每 24h 检查一次（localStorage 节流），结果缓存到 localStorage 跨刷新显示。三种状态：已是官方最新（灰）、源码领先但无包（黄）、有可升级官方构建（黄 + 点击复制升级命令）。离线/被限流静默。
-- **命令行**：`npm run check:upstream`（`node tools/check-upstream.mjs`），额外检测 **package.json 实际安装版本与 `canvas-web/vite.config.ts` 里 `__CANVAS_BASELINE__` 声明是否漂移**。退出码：`1` = 有可升级项或存在漂移，`0` = 已是最新或离线无法判定。
+- **浏览器（默认）**：`UpstreamBadge` 每 24h 检查一次（localStorage 节流），结果缓存到 localStorage 跨刷新显示。**四种状态**：已是官方最新（灰）、源码领先但无包（黄）、有可升级官方构建（黄 + 点击复制升级命令）、**自检被限流**（灰，显示预计重试时间）。真离线保持静默。
+- **命令行**：`npm run check:upstream`（`node tools/check-upstream.mjs`），额外检测 **package.json 实际安装版本与 `canvas-web/vite.config.ts` 里 `__CANVAS_BASELINE__` 声明是否漂移**。退出码：`1` = 有可升级项或存在漂移，`0` = 已是最新 / 被限流 / 离线。
 - 判定规则集中在 `canvas-web/src/upstream-core.mjs`（纯函数、无网络），浏览器与 CLI 共用，避免平行实现。
+
+### 5.1 限流可见化（2026-09-23 第二轮）
+
+**背景**：GitHub 未认证 API 限额为**每 IP 每小时 60 次**，而一次自检要发 **2 次** GitHub 请求（`commits/master` + `compare`；npm dist-tags 不占额度）。触发 403 时上述实现的旧行为是**静默不显示徽标**——用户会以为"没有更新"，实际是"没查到"。实测证据：本轮排查耗尽了当日配额，`GET /rate_limit` 显示 `remaining: 0`，重置时间 14:36。
+
+**改动**：
+1. `assess()` 新增 **`rate-limited`** 状态：调用方在收到 403/429 时把 `blocked: { status, resetAt }` 传入（`resetAt` 取自响应头 `x-ratelimit-reset`），产出带**预计重试时刻**的中英文说明；真离线（无 `blocked`）仍是 `unknown` → 静默。
+2. 徽标新增灰色 `⏳ 自检被限流，HH:MM 后重试` 态；并把重试时刻存进 `pi-canvas-upstream-retry`，**配额重置前不再发任何请求**（避免继续空耗；24h 时间戳只在成功时写，限流不占用它）。
+3. CLI 同样识别 403/429，打印「自检被限流」与恢复时间，退出码仍为 `0`（不可行动，不该让 CI 变红）。
+
+### 5.2 `pickLatestBuild` 的实现与注释对齐
+
+原注释写「因此优先取 next」，实现却是「取第一个匹配 canary 正则的标签」，靠 `Object.entries` 的键顺序决定，并未显式优先 `next`。现改为**显式把 `next` 提到候选首位**再回退其余；当前 dist-tags 里只有 `next` 匹配 `0.18.0-<sha7>`（`preview` 带后缀、`test` 是 `0.5.0`），故行为不变，但已不再依赖注册表键顺序。
+
+### 5.3 判定逻辑单测
+
+新增 `canvas-web/src/upstream-core.test.mjs`（`node:test`，`npm test` 一并运行），用**合成 API 数据**覆盖真实环境难复现的分支：限流（含 `x-ratelimit-reset` 解析）、已发布新构建、`pickLatestBuild` 的 `next` 优先级，以及**「本地 pin 比已发布构建更新」时不得误报可升级**的防护。当前 14 项测试全绿（原 4 项 auth + 新增 10 项）。
+
