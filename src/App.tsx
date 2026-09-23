@@ -1,183 +1,81 @@
-import { useCallback, useMemo, useRef, useState } from "react";
-import {
-  Excalidraw,
-  serializeAsJSON,
-  loadFromBlob,
-} from "@excalidraw/excalidraw";
-import type {
-  ExcalidrawImperativeAPI,
-  BinaryFiles,
-  AppState,
-  ExcalidrawProps,
-} from "@excalidraw/excalidraw/types";
+// :5002 单画布工作区 —— 纯官方壳（2026-09-23 收拢）
+//
+// 原则：除「官方未提供的能力」外一律走官方实现。本轮移除的自研代码：
+//   ✂ 打开 .excalidraw 文件   → 官方 canvasActions.loadScene（File 菜单 Open）
+//   ✂ 保存为文件             → 官方 export.saveFileToDisk（File 菜单 Save as / Export）
+//   ✂ 清空画布 / 新建        → 官方 clearCanvas（File 菜单 Reset the canvas）
+//   ✂ 手写 localStorage 自动保存 → 官方 npm 包不提供场景持久化
+//     （证据：@excalidraw/common 的 EDITOR_LS_KEYS 只有 oai-api-key / mermaid /
+//      publish-library 三项，不含场景数据），因此不属于「重复官方能力」而被移除。
+//
+// 保留下来的非官方代码只有两点，都是明确的功能补充而非重复：
+//   1. 官方 lang prop 的语言切换按钮（挂在官方 renderTopRightUI 插槽）
+//   2. 未保存改动时的浏览器离开提醒（替代被移除的自动保存，兜底防丢失）
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Excalidraw } from "@excalidraw/excalidraw";
+import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
-type OnChangeArgs = Parameters<NonNullable<ExcalidrawProps["onChange"]>>;
-
-const AUTOSAVE_KEY = "excalidraw:workspace:autosave";
-const DEFAULT_FILE_NAME = "main.excalidraw";
+const LANG_KEY = "excalidraw-canvas-lang";
 
 export default function App() {
-  const excalidrawAPI = useRef<ExcalidrawImperativeAPI | null>(null);
-  const [fileName, setFileName] = useState(DEFAULT_FILE_NAME);
-  const [saveState, setSaveState] = useState<"saved" | "unsaved">("saved");
-  const [loadedAt, setLoadedAt] = useState(0);
-  const autoSaveTimer = useRef<number | null>(null);
-
-  // 初始数据：从 localStorage 恢复（reopen 能力）
-  const initialData = useMemo(() => {
+  const dirtyRef = useRef(false);
+  const [lang, setLang] = useState<"zh-CN" | "en">(() => {
     try {
-      const raw = localStorage.getItem(AUTOSAVE_KEY);
-      if (raw) {
-        const data = JSON.parse(raw);
-        setLoadedAt(Date.now());
-        return {
-          elements: data.elements ?? [],
-          appState: data.appState ?? undefined,
-          files: data.files ?? undefined,
-        };
-      }
-    } catch (e) {
-      console.warn("恢复自动保存失败", e);
-    }
-    return undefined;
+      const v = localStorage.getItem(LANG_KEY);
+      if (v === "zh-CN" || v === "en") return v;
+    } catch { /* ignore */ }
+    return (navigator.language || "").toLowerCase().startsWith("zh") ? "zh-CN" : "en";
+  });
+
+  const setLanguage = useCallback((l: "zh-CN" | "en") => {
+    setLang(l);
+    try { localStorage.setItem(LANG_KEY, l); } catch { /* ignore */ }
   }, []);
 
-  const handleChange = useCallback(
-    (
-      elements: OnChangeArgs[0],
-      appState: OnChangeArgs[1],
-      files: OnChangeArgs[2]
-    ) => {
-      setSaveState("unsaved");
-      if (autoSaveTimer.current) window.clearTimeout(autoSaveTimer.current);
-      autoSaveTimer.current = window.setTimeout(() => {
-        try {
-          const json = serializeAsJSON(elements, appState, files, "local");
-          localStorage.setItem(AUTOSAVE_KEY, json);
-          setSaveState("saved");
-        } catch (e) {
-          console.error("自动保存失败", e);
-        }
-      }, 500);
-    },
-    []
-  );
-
-  // 保存为 .excalidraw 文件（下载）
-  const handleSaveToFile = useCallback(() => {
-    const api = excalidrawAPI.current;
-    if (!api) return;
-    const elements = api.getSceneElements();
-    const appState = api.getAppState();
-    const files = api.getFiles();
-    const json = serializeAsJSON(elements, appState, files, "local");
-    const blob = new Blob([json], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    setSaveState("saved");
-  }, [fileName]);
-
-  // 打开 .excalidraw 文件
-  const handleOpenFile = useCallback(async (file: File) => {
-    const api = excalidrawAPI.current;
-    if (!api) return;
-    const blob = new Blob([await file.arrayBuffer()], {
-      type: "application/json",
-    });
-    const restored = await loadFromBlob(
-      blob,
-      api.getAppState(),
-      api.getSceneElements()
-    );
-    api.updateScene({
-      elements: restored.elements,
-      appState: restored.appState,
-    });
-    if (restored.files && Object.keys(restored.files).length > 0) {
-      api.addFiles(Object.values(restored.files));
-    }
-    setFileName(
-      file.name.toLowerCase().endsWith(".excalidraw")
-        ? file.name
-        : `${file.name}.excalidraw`
-    );
-    setSaveState("unsaved");
+  // 纯官方壳不带自动保存 → 有改动未导出时交给浏览器提示，避免刷新即丢
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (!dirtyRef.current) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
   }, []);
 
-  // 新建空白画布
-  const handleNew = useCallback(() => {
-    const api = excalidrawAPI.current;
-    if (!api) return;
-    const appState = api.getAppState();
-    api.updateScene({
-      elements: [],
-      appState: { ...appState, viewBackgroundColor: "#ffffff" },
-    });
-    localStorage.removeItem(AUTOSAVE_KEY);
-    setSaveState("unsaved");
+  const handleApi = useCallback((api: ExcalidrawImperativeAPI | null) => {
+    if (api) dirtyRef.current = false;
   }, []);
+
+  const handleChange = useCallback(() => { dirtyRef.current = true; }, []);
 
   return (
     <div className="app-root">
-      <div className="toolbar">
-        <span className="app-title">Excalidraw 工作区</span>
-        <span className="file-name">{fileName}</span>
-        <button onClick={handleNew}>新建</button>
-        <label className="file-btn">
-          <button
-            onClick={(e) => {
-              e.preventDefault();
-              const input = document.getElementById(
-                "excalidraw-file-input"
-              ) as HTMLInputElement;
-              input?.click();
-            }}
-          >
-            打开 .excalidraw
-          </button>
-          <input
-            id="excalidraw-file-input"
-            type="file"
-            accept=".excalidraw,application/json"
-            style={{ display: "none" }}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) handleOpenFile(f);
-              e.target.value = "";
-            }}
-          />
-        </label>
-        <button onClick={handleSaveToFile}>保存文件</button>
-        <span className={`status ${saveState}`}>
-          {saveState === "saved" ? "✓ 已自动保存" : "… 修改中"}
-        </span>
-      </div>
       <div className="canvas-wrap">
         <Excalidraw
-          onExcalidrawAPI={(api) => {
-            excalidrawAPI.current = api;
-          }}
-          initialData={initialData}
+          onExcalidrawAPI={handleApi}
           onChange={handleChange}
+          // 官方 prop 是 langCode（Language["code"]，如 "en" / "zh-CN"）——没有 lang 这个 prop
+          langCode={lang}
+          theme="light"
+          name="Excalidraw-Workspace-Single"
           UIOptions={{
             canvasActions: {
-              loadScene: false,
-              saveToActiveFile: false,
-            },
-            tools: {
-              image: true,
+              loadScene: true,                    // 官方：打开 .excalidraw
+              export: { saveFileToDisk: true },   // 官方：另存为 / 导出
+              saveAsImage: true,
+              clearCanvas: true,                  // 官方：清空画布
             },
           }}
+          renderTopRightUI={() => (
+            <button
+              className="lang-toggle"
+              title={lang === "zh-CN" ? "Switch to English" : "切换为中文"}
+              onClick={() => setLanguage(lang === "zh-CN" ? "en" : "zh-CN")}>
+              {lang === "zh-CN" ? "EN" : "中"}
+            </button>
+          )}
         />
-      </div>
-      <div className="hint-bar">
-        协作画布 http://192.168.0.1:5001（Canvas Server）｜本工作区 :5002 ｜ 双指缩放平移、手写笔绘图均支持
       </div>
     </div>
   );

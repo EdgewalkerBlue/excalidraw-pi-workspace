@@ -14,11 +14,8 @@ rem ============================================================
 
 cd /d "%~dp0"
 
-rem ---- 0.5) i18n / server patches (idempotent; same as start-canvas.bat) ----
-node tools\patch-i18n.mjs
-if errorlevel 1 (
-  echo [警告] i18n 补丁执行失败（可手动运行: node tools\patch-i18n.mjs）
-)
+rem ---- 0.5) canvas server patch (idempotent; same as start-canvas.bat) ----
+rem      NOTE: patch-i18n retired 2026-09-23 (legacy/) - i18n now uses the official langCode prop.
 node tools\patch-server.mjs
 if errorlevel 1 (
   echo [警告] server 补丁执行失败（可手动运行: node tools\patch-server.mjs）

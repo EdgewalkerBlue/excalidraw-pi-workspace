@@ -1,0 +1,17 @@
+{
+  "name": "Excalidraw 画布（协作工作区）",
+  "short_name": "Excalidraw",
+  "description": "Android 可访问的 Excalidraw 无限画布（官方 master 底层 + Agent 双向协作）",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#1e1e2e",
+  "theme_color": "#1e1e2e",
+  "lang": "zh-CN",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -16,5 +16,8 @@
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "vite.config.ts"]
+  "types": ["vite/client"],
+  // canvas-web/src 自 2026-09-23 纳入检查：此前只查 src/，导致画布前端把官方 prop
+  // excalidrawAPI / lang 写错（正确为 onExcalidrawAPI / langCode）却无人发现。
+  "include": ["src", "canvas-web/src", "vite.config.ts"]
 }

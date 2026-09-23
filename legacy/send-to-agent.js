@@ -19,6 +19,53 @@
 (function () {
   "use strict";
 
+  // ── 协作可见性追踪：给 bundle 的 sync POST 注入稳定 X-Client-Id ──
+  // server（sync-guard v6）按"哪个客户端见过哪些元素"判定删除：从未见过某元素的
+  // 客户端缺席它不构成删除证据（多端竞态保护）。id 按 origin 持久化于 localStorage。
+  // 另：显式删除墓碑——bundle 的 sync 会滤掉 isDeleted 元素（server 只能靠缺席推断删除，
+  // 而 120s 宽限期内刷新页面会把已删元素灌回来复活）。此处对比本端前后两次 sync 的
+  // 元素差集，差集即本端刚删除的元素，立即逐个调用显式 DELETE 通道，删除即时生效并广播。
+  (function injectClientId() {
+    var KEY = "pi-canvas-client-id";
+    var cid = null;
+    try { cid = localStorage.getItem(KEY); } catch (e) { /* 隐私模式等 */ }
+    if (!cid) {
+      cid = "c-" + Math.random().toString(36).slice(2, 10) + "-" + Date.now().toString(36);
+      try { localStorage.setItem(KEY, cid); } catch (e) { /* 忽略 */ }
+    }
+    var origFetch = window.fetch ? window.fetch.bind(window) : null;
+    if (!origFetch || window.__piClientIdPatched) return;
+    window.__piClientIdPatched = true;
+    var lastSceneIds = null; // 上次成功 sync 的元素 id 集（仅内存，随页面会话）
+    window.fetch = function (input, init) {
+      var isSync = false;
+      try {
+        var url = typeof input === "string" ? input : (input && input.url) || "";
+        isSync = /\/api\/elements\/sync/.test(url);
+      } catch (e) { /* 忽略 */ }
+      if (!isSync || !init || !init.body) return origFetch(input, init);
+      var ids;
+      try { ids = (JSON.parse(init.body).elements || []).map(function (e2) { return e2.id; }); }
+      catch (e) { return origFetch(input, init); }
+      // 删除墓碑：上次有、这次没有 → 本端刚删除的元素，显式 DELETE（server 立即删 + 广播各端）
+      if (lastSceneIds) {
+        lastSceneIds.forEach(function (rid) {
+          if (ids.indexOf(rid) < 0) {
+            origFetch("/api/elements/" + encodeURIComponent(rid), { method: "DELETE" }).catch(function () {});
+          }
+        });
+      }
+      var sentIds = ids.slice();
+      var p = origFetch(input, Object.assign({}, init, {
+        headers: Object.assign({}, init.headers || {}, { "X-Client-Id": cid }),
+      }));
+      return p.then(function (res) {
+        if (res.ok) lastSceneIds = new Set(sentIds);
+        return res;
+      }, function (err) { throw err; });
+    };
+  })();
+
   var BTN_ID = "send-to-agent-btn";
   var APPROVE_BTN_ID = "approve-btn";
   var REJECT_BTN_ID = "reject-btn";

@@ -25,6 +25,16 @@ const FRONTEND = path.resolve(
   "frontend"
 );
 
+// 官方底层新前端（canvas-web）自带 PWA 资源（public/ 构建时复制）——no-op，
+// 避免旧 sw/manifest 覆盖新前端的 SW（两者缓存策略不同：新版 API 永不缓存）。
+try {
+  const idx = path.join(FRONTEND, "index.html");
+  if (fs.existsSync(idx) && fs.readFileSync(idx, "utf8").includes('id="root"')) {
+    console.log("[patch-pwa] 检测到 canvas-web 官方底层前端（自带 PWA），跳过");
+    process.exit(0);
+  }
+} catch { /* 检测失败按旧流程走 */ }
+
 // ---------- 最小 PNG 编码（无外部依赖） ----------
 const CRC_TABLE = (() => {
   const t = new Uint32Array(256);
@@ -150,10 +160,13 @@ fs.writeFileSync(
   )
 );
 
-fs.writeFileSync(
-  out("sw.js"),
-  `// Excalidraw 工作区 Service Worker（PWA 离线缓存）
-const CACHE = "excalidraw-workspace-v4";
+// ---------- sw.js（版本自管理 + API 直通） ----------
+// - /api/ 请求不拦截缓存：缓存 GET /api/elements 会让客户端永远读到旧场景
+// - 版本号自管理：内容与现有 sw.js 不同才 bump（activate 时清掉旧缓存），
+//   避免每次重跑把 patch-i18n 升上去的版本打回固定值
+const SW_PATH = out("sw.js");
+const swSrc = (ver) => `// Excalidraw 工作区 Service Worker（PWA 离线缓存）
+const CACHE = "excalidraw-workspace-v${ver}";
 const APP_SHELL = ["./", "./index.html", "./manifest.json", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", (e) => {
@@ -173,6 +186,8 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== "GET" || url.origin !== self.location.origin) return;
+  // API 请求永远走网络（缓存 /api/ 会让 GET /api/elements 永远返回旧场景）
+  if (url.pathname.startsWith("/api/")) return;
   // 导航请求（页面/刷新）：网络优先，离线时回退缓存 → 避免旧页面缓存
   if (e.request.mode === "navigate") {
     e.respondWith(
@@ -195,8 +210,24 @@ self.addEventListener("fetch", (e) => {
     }))
   );
 });
-`
-);
+`;
+{
+  const prevSw = fs.existsSync(SW_PATH) ? fs.readFileSync(SW_PATH, "utf8") : null;
+  const prevVer = prevSw ? (parseInt((prevSw.match(/excalidraw-workspace-v(\d+)/) || [])[1], 10) || 0) : 0;
+  let nextVer = Math.max(prevVer, 4);
+  if (prevSw) {
+    // send-to-agent.js 无 hash 文件名，也被静态缓存 → 其内容变化必须 bump（否则旧客户端拿旧注入脚本）
+    const sendSrcPath = path.resolve(__dirname, "..", "webui", "send-to-agent.js");
+    const prevSend = fs.existsSync(out("send-to-agent.js")) ? fs.readFileSync(out("send-to-agent.js"), "utf8") : "";
+    const newSend = fs.existsSync(sendSrcPath) ? fs.readFileSync(sendSrcPath, "utf8") : "";
+    const stripVer = (t) => t.replace(/excalidraw-workspace-v\d+/g, "");
+    const swChanged = stripVer(prevSw) !== stripVer(swSrc(nextVer));
+    const sendChanged = prevSend !== newSend;
+    if (swChanged || sendChanged) nextVer = prevVer + 1;
+  }
+  fs.writeFileSync(SW_PATH, swSrc(nextVer));
+  console.log(`sw.js 已写入（缓存版本 v${nextVer}${prevVer && nextVer > prevVer ? "，activate 时清旧缓存" : ""}）`);
+}
 
 // ---------- 幂等补丁 index.html ----------
 const indexHtml = path.join(FRONTEND, "index.html");

@@ -320,6 +320,20 @@ function bumpSwCache() {
   return true;
 }
 
+const ok0 = (() => {
+  // 官方底层新前端（canvas-web 构建产物）已接管：语言切换/双语由 React 壳原生实现，
+  // 旧 bundle 文本补丁全部不再适用——no-op 退出，避免误报与覆盖。
+  const idx = path.join(FRONTEND, "index.html");
+  try {
+    if (fs.existsSync(idx) && fs.readFileSync(idx, "utf8").includes('id="root"')) {
+      console.log("[patch-i18n] 检测到 canvas-web 官方底层前端，i18n 由新前端原生支持，跳过");
+      return "skip";
+    }
+  } catch { /* 检测失败按旧流程走 */ }
+  return "run";
+})();
+if (ok0 === "skip") process.exit(0);
+
 const ok1 = patchBundle();
 const ok2 = syncInjection();
 const ok3 = bumpSwCache();

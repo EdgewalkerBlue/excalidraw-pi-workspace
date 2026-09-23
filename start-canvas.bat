@@ -1,50 +1,63 @@
 @echo off
-chcp 65001 >nul
-setlocal
+setlocal EnableDelayedExpansion
 rem ============================================================
-rem  Excalidraw 工作区 一键启动
-rem    :5001  Canvas Server (mcp-excalidraw-server, 协作闭环锚点)
-rem    :5010  Agent 通知服务 (Send to Agent / Approve / Reject)
-rem  工作区 UI (npm run dev) 使用 :5002，不会与 Canvas Server 冲突
+rem  Excalidraw workspace one-click startup (silent background)
+rem    :5001  Canvas Server (mcp-excalidraw-server)
+rem    :5010  Agent notify service (Send to Agent / Approve / Reject)
+rem    Logs:  logs\canvas.log / logs\notify.log
+rem    Stop:  stop-canvas.bat
+rem  NOTE: keep this file ASCII-only with CRLF line endings.
+rem        Non-ASCII chars or LF endings break cmd parsing.
+rem        Avoid unescaped ) inside echo lines in ( ) blocks.
 rem ============================================================
 
-rem ---- 0) 端口预检：5001（Canvas Server）----
+cd /d "%~dp0"
+if not exist logs mkdir logs
+
+rem ---- 0) Port pre-check :5001 ----
 netstat -ano | findstr /r /c:":5001 .*LISTENING" >nul 2>&1
 if not errorlevel 1 (
-  echo [错误] 端口 5001 已被占用，Canvas Server 无法启动！
-  echo        占用进程如下：
-  netstat -ano | findstr /r /c:":5001 .*LISTENING"
-  echo.
-  echo        请先结束占用进程后重试，例如：
-  echo          taskkill /PID ^<占用PID^> /F
-  echo        注意：npm run dev / preview 使用 5002，不会与 5001 冲突。
-  echo.
-  pause
-  exit /b 1
+  echo [INFO] Canvas already running on :5001 - http://localhost:5001
+  start http://localhost:5001
+  timeout /t 2 /nobreak >nul
+  exit /b 0
 )
 
-rem ---- 1) 补丁（幂等，保障 node_modules 更新后仍生效）----
-node tools\patch-i18n.mjs >nul 2>&1
+rem ---- 1) Canvas server patch (idempotent, survives node_modules updates) ----
+rem     NOTE: patch-i18n / patch-pwa were retired 2026-09-23 (legacy/):
+rem     i18n is handled by the official `lang` prop, PWA assets ship in canvas-web/public.
 node tools\patch-server.mjs >nul 2>&1
 
-rem ---- 2) Agent 通知服务（后台，5010；已运行则跳过）----
+rem ---- 2) Agent notify service (hidden background, :5010) ----
 netstat -ano | findstr /r /c:":5010 .*LISTENING" >nul 2>&1
 if not errorlevel 1 (
-  echo [提示] 端口 5010 已有服务在运行，跳过 agent-notify 启动。
+  echo [INFO] Notify service already running on :5010, skip.
 ) else (
-  echo [启动] Agent 通知服务 (agent-notify :5010) ...
-  start "agent-notify" /B node tools\agent-notify.mjs
+  powershell -NoProfile -Command "Start-Process -FilePath 'node' -ArgumentList 'tools\agent-notify.mjs' -WorkingDirectory '%cd%' -WindowStyle Hidden" >nul 2>&1
+  echo [START] Agent notify service :5010 - background
 )
 
-rem ---- 3) Canvas Server（前台，0.0.0.0:5001）----
+rem ---- 3) Canvas server (hidden background, 0.0.0.0:5001) ----
 set PORT=5001
 set HOST=0.0.0.0
 set EXCALIDRAW_EXPORT_DIR=%cd%\architecture
-echo [启动] Excalidraw Canvas Server :5001 ...
+powershell -NoProfile -Command "Start-Process -FilePath 'node' -ArgumentList 'node_modules\mcp-excalidraw-server\dist\server.js' -WorkingDirectory '%cd%' -WindowStyle Hidden -RedirectStandardOutput 'logs\canvas.log' -RedirectStandardError 'logs\canvas-err.log'" >nul 2>&1
+echo [START] Excalidraw Canvas Server :5001 - background...
 
-rem ---- 4) 后台探测启动成功后自动打开浏览器 ----
-start "" /B cmd /c "timeout /t 4 /nobreak >nul & curl -s -m 3 -o nul http://127.0.0.1:5001/ && start http://localhost:5001"
-
-echo        本机访问:  http://localhost:5001   （浏览器将自动打开）
-echo        局域网访问: http://<本机LAN-IP>:5001  （Ctrl+C 停止服务）
-node node_modules\mcp-excalidraw-server\dist\server.js
+rem ---- 4) Probe up to 30s, open browser on success ----
+set OK=0
+for /l %%i in (1,1,30) do (
+  if "!OK!"=="0" (
+    timeout /t 1 /nobreak >nul
+    curl -s -m 3 -o nul http://127.0.0.1:5001/ && set OK=1
+  )
+)
+if "!OK!"=="1" (
+  echo [OK] Canvas running: http://localhost:5001 - opening browser...
+  echo        Stop: stop-canvas.bat ^| Logs: logs\
+  start http://localhost:5001
+) else (
+  echo [FAIL] Canvas not responding, see logs\canvas-err.log
+)
+timeout /t 3 /nobreak >nul
+endlocal

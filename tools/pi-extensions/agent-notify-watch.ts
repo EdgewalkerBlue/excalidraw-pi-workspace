@@ -8,7 +8,8 @@
  * Pi TUI 实时弹出通知并在顶部显示收件箱 Widget，直至标记被清除。
  *
  * 相关组件：
- *   - Web UI 按钮: webui/send-to-agent.js（Send to Agent / Approve）
+ *   - Web UI 按钮: canvas-web/src/agent-tools.tsx（Send to Agent / Approve / Reject）
+ *     （旧的 webui/send-to-agent.js 已于 2026-09-23 退役归档到 legacy/）
  *   - 通知服务: tools/agent-notify.mjs（监听 5010，写标记）
  *   - 标记文件: <project>/.agent/pending.json, approved.json
  *
