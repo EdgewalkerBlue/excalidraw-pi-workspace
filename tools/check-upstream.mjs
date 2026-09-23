@@ -22,13 +22,27 @@ import { UPSTREAM_ENDPOINTS, assess, pickLatestBuild } from "../canvas-web/src/u
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 
+/** 带 HTTP 状态的错误，便于把 403/429 识别为「限流」而非「离线」 */
+class HttpError extends Error {
+  constructor(url, status, resetAt) {
+    super(`${status} ${url}`);
+    this.name = "HttpError";
+    this.status = status;
+    this.resetAt = resetAt;
+  }
+}
+
 function getJson(url, headers = {}) {
   return new Promise((resolve, reject) => {
     const req = https.get(url, { headers: { "User-Agent": "excalidraw-workspace", Accept: "application/json", ...headers } }, (res) => {
       let body = "";
       res.on("data", (c) => (body += c));
       res.on("end", () => {
-        if (res.statusCode >= 400) return reject(new Error(`${res.statusCode} ${url}`));
+        if (res.statusCode >= 400) {
+          const raw = res.headers["x-ratelimit-reset"];
+          const reset = raw ? Number(raw) : NaN;
+          return reject(new HttpError(url, res.statusCode, Number.isFinite(reset) ? reset : undefined));
+        }
         try { resolve(JSON.parse(body)); } catch (e) { reject(e); }
       });
     });
@@ -72,7 +86,15 @@ async function main() {
   await Promise.all([
     getJson(UPSTREAM_ENDPOINTS.head).then((v) => {
       fetched.master = { sha: v.sha, date: v.commit?.committer?.date };
-    }).catch((e) => errors.push(`GitHub master: ${e.message}`)),
+    }).catch((e) => {
+      // 403/429 = 未认证接口限流（每 IP 每小时 60 次，一次自检消耗 2 次）→ 让判定产出可见解释
+      if (e instanceof HttpError && (e.status === 403 || e.status === 429)) {
+        fetched.blocked = { status: e.status, resetAt: e.resetAt };
+        errors.push(`GitHub master 被限流（HTTP ${e.status}）`);
+      } else {
+        errors.push(`GitHub master: ${e.message}`);
+      }
+    }),
     getJson(UPSTREAM_ENDPOINTS.compare(baseline.commit)).then((v) => {
       fetched.compare = { total_commits: v.total_commits, commits: v.commits || [] };
     }).catch((e) => errors.push(`GitHub compare: ${e.message}`)),
@@ -94,8 +116,11 @@ async function main() {
     console.log(` 上游 master  : ${result.masterSha || "—"} (${result.masterDate || "—"})  领先 ${result.behindBy} 个提交`);
     console.log(` 官方最新构建 : ${build.version || "—"}  (dist-tag ${build.tag})`);
     console.log(` 判定         : ${stateLabel(result.state)}`);
+    if (result.state === "rate-limited") {
+      console.log(` 限流说明     : 画布徽标会显示「自检被限流」${result.resetLabel ? `，预计 ${result.resetLabel} 后恢复` : ""}（画布功能不受影响）`);
+    }
     if (result.command) console.log(` 升级命令     : ${result.command}`);
-    if (errors.length) console.log(` 网络告警     : ${errors.join(" | ")}（离线或被限流，判定可能不完整）`);
+    if (errors.length) console.log(` 网络告警     : ${errors.join(" | ")}`);
     console.log(" 画布 WebUI 每 24h 自检一次，有新构建时右上角徽标会自动变黄。");
   }
 
@@ -107,7 +132,8 @@ function stateLabel(s) {
     "up-to-date": "已是官方最新 / up to date",
     "build-available": "有可升级的官方构建 / newer official build available",
     "source-only": "仅源码领先，尚未发布构建 / source-only commits ahead",
-    unknown: "无法判定（离线/限流） / unknown (offline or rate-limited)",
+    "rate-limited": "自检被限流（配额重置后自动重试） / self-check rate-limited",
+    unknown: "无法判定（离线） / unknown (offline)",
   }[s] || s;
 }
 

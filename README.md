@@ -132,11 +132,13 @@ The canvas does **not** fork Excalidraw — it consumes the official npm build a
 
 > **Never align to npm `latest`.** `latest` is `0.18.1`, published 2026-04-20 — its code is ~5 months *older* than the pinned canary. The tag that tracks master is **`next`** (`0.18.0-<sha7>`). Full comparison: [UPSTREAM-DIFF.md](UPSTREAM-DIFF.md).
 
-**Self-check** — the canvas badge queries upstream `master` + npm dist-tags once per 24h and shows three states: `✓ up to date` (grey), `source ahead N` (yellow, no build published yet), `new build <version>` (yellow; click to copy the upgrade command). Offline: silent. The CLI adds *baseline drift* detection (declared `__CANVAS_BASELINE__` ≠ installed version):
+**Self-check** — the canvas badge queries upstream `master` + npm dist-tags once per 24h and shows four states: `✓ up to date` (grey), `source ahead N` (yellow, no build published yet), `new build <version>` (yellow; click to copy the upgrade command), and `⏳ self-check rate-limited, retry after HH:MM` (grey). Genuine network failures stay silent, but GitHub's unauthenticated API limit (60 requests/hour per IP; one check costs 2) is surfaced explicitly instead of making the badge disappear. While the quota is exhausted no further requests are made. The CLI adds *baseline drift* detection (declared `__CANVAS_BASELINE__` ≠ installed version):
 
 ```bash
 npm run check:upstream          # exit 1 = upgrade available or baseline drifted
 ```
+
+The decision rules are covered by unit tests that use synthetic API payloads — including the rate-limit branch and the "local pin is newer than the published build" false-positive guard: `npm test` (see `canvas-web/src/upstream-core.test.mjs`).
 
 To upgrade: `npm install @excalidraw/excalidraw@<version>` → sync `__CANVAS_BASELINE__` in `canvas-web/vite.config.ts` → `npm run build:canvas` → restart the canvas.
 
