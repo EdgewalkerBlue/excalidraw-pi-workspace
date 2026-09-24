@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite",
     "dev:canvas": "vite --config canvas-web/vite.config.ts",
-    "test": "node --test modules/auth/login.test.js canvas-web/src/upstream-core.test.mjs",
+    "test": "node --test modules/auth/login.test.js canvas-web/src/upstream-core.test.mjs canvas-web/src/appearance.test.mjs canvas-web/src/menu-link-inject.test.mjs tools/save-targets.test.mjs",
     "build": "npm run build:canvas",
     "build:workspace": "tsc -b && vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
@@ -15,7 +15,9 @@
     "check:upstream": "node tools/check-upstream.mjs",
     "ship": "ship.bat",
     "preview": "vite preview --host 0.0.0.0 --port 5002",
-    "start": "vite preview --host 0.0.0.0 --port 5002"
+    "start": "vite preview --host 0.0.0.0 --port 5002",
+    "test:bridge": "node tools/save-bridge.integration.mjs",
+    "build:canvas:safe": "node tools/deploy-canvas-build.mjs"
   },
   "dependencies": {
     "@excalidraw/excalidraw": "0.18.0-c0ad61c",

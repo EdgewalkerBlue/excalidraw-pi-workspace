@@ -8,6 +8,7 @@
 //     并在配额重置前不再发请求（避免无意义地继续消耗）；真离线则保持静默。
 import { useCallback, useEffect, useState } from "react";
 import { CHECK_INTERVAL, UPSTREAM_ENDPOINTS, assess } from "./upstream-core.mjs";
+import { toolbarBadge } from "./toolbar-style";
 
 const CHECK_KEY = "pi-canvas-upstream-check";
 const RESULT_KEY = "pi-canvas-upstream-result";
@@ -140,14 +141,13 @@ export default function UpstreamBadge({ lang }: { lang: "zh-CN" | "en" }) {
       role="button"
       title={state.title[lang === "zh-CN" ? "zh" : "en"]}
       onClick={() => { void copy(); if (!limited) void refresh(true); }}
-      style={{
-        marginLeft: 6, padding: "4px 8px", borderRadius: 4, fontSize: 12,
-        backgroundColor: warn ? "#fff3bf" : "#f1f3f5",
-        border: `1px solid ${warn ? "#ffd43b" : limited ? "#adb5bd" : "#dee2e6"}`,
-        color: warn ? "#664d03" : "#495057",
+      style={toolbarBadge({
+        backgroundColor: warn ? "#fff3bf" : "var(--island-bg-color, #f1f3f5)",
+        border: `1px solid ${warn ? "#ffd43b" : limited ? "#adb5bd" : "var(--color-border-outline, #dee2e6)"}`,
+        color: warn ? "#664d03" : "var(--text-primary-color, #495057)",
         cursor: state.command ? "pointer" : "default",
-        whiteSpace: "nowrap", userSelect: "none", fontFamily: "inherit",
-      }}>
+        userSelect: "none",
+      })}>
       {warn ? "⬆ " : limited ? "⏳ " : "✓ "}
       {text}
     </div>

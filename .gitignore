@@ -8,6 +8,8 @@ dist/
 !.pi/task_set.json
 .auth.env
 *.excalidraw
+# 「保存到…」中转服务的配置（含 WebDAV 凭据与网盘 token）—— 绝不入库
+.save-targets.json
 # 本机 Agent/工具数据（会话档案、记忆、finding ledger），不入库
 .mimosa/
 .workbuddy/

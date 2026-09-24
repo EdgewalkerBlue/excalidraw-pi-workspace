@@ -57,7 +57,9 @@ export default function App() {
           onChange={handleChange}
           // 官方 prop 是 langCode（Language["code"]，如 "en" / "zh-CN"）——没有 lang 这个 prop
           langCode={lang}
-          theme="light"
+          // 刻意**不传** theme：官方类型注释写明「theme 缺省或提供 onThemeChange 时，
+          // 主题被视为由官方 UI 控制」，此时官方菜单里会出现主题切换项。
+          // 作为纯官方壳，不自建主题控件（传了 theme 就等于声明宿主接管，官方切换项会消失）。
           name="Excalidraw-Workspace-Single"
           UIOptions={{
             canvasActions: {

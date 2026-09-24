@@ -5,8 +5,25 @@ import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import { SyncClient, fetchScene, getClientId, type CanvasElement } from "./sync";
 import AgentTools from "./agent-tools";
 import UpstreamBadge from "./upstream-badge";
+import SaveTargets from "./save-targets";
+import ExtraMenuLinks from "./extra-menu-links";
+import { BackgroundPicker, ThemeToggle } from "./appearance-controls";
+import { toolbarButton, toolbarRow } from "./toolbar-style";
+import {
+  BG_KEY, THEME_KEY, isDarkTheme, nextThemeMode, normalizeHex, parseThemeMode, resolveTheme,
+  type ResolvedTheme, type ThemeMode,
+} from "./appearance.mjs";
 
 const LANG_KEY = "excalidraw-canvas-lang";
+
+/** 系统是否处于深色（用于 theme="system"） */
+function systemPrefersDark(): boolean {
+  try {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
+  } catch {
+    return false;
+  }
+}
 
 export default function CanvasApp() {
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
@@ -19,6 +36,46 @@ export default function CanvasApp() {
     } catch { /* ignore */ }
     return (navigator.language || "").toLowerCase().startsWith("zh") ? "zh-CN" : "en";
   });
+
+  // 主题三态 + 系统深色跟随（官方 theme 只认 light/dark，system 由我们解析）
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
+    try { return parseThemeMode(localStorage.getItem(THEME_KEY)); } catch { return "system"; }
+  });
+  const [systemDark, setSystemDark] = useState<boolean>(systemPrefersDark);
+  const theme: ResolvedTheme = resolveTheme(themeMode, systemDark);
+
+  useEffect(() => {
+    let mq: MediaQueryList | null = null;
+    try { mq = window.matchMedia("(prefers-color-scheme: dark)"); } catch { /* ignore */ }
+    if (!mq) return;
+    const on = (e: MediaQueryListEvent) => setSystemDark(e.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+
+  // 画布底色：null = 沿用官方默认（绝不主动写白色，避免"导出默认白底"）
+  const [bg, setBg] = useState<string | null>(() => {
+    try { return normalizeHex(localStorage.getItem(BG_KEY)); } catch { return null; }
+  });
+  const bgRef = useRef<string | null>(bg);
+  bgRef.current = bg;
+
+  const cycleTheme = useCallback(() => {
+    setThemeMode((m) => {
+      const next = nextThemeMode(m);
+      try { localStorage.setItem(THEME_KEY, next); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+
+  const pickBackground = useCallback((hex: string) => {
+    const n = normalizeHex(hex);
+    if (!n) return;
+    setBg(n);
+    try { localStorage.setItem(BG_KEY, n); } catch { /* ignore */ }
+    // 走官方字段：与官方取色器 actionChangeViewBackgroundColor 写的是同一个 appState
+    apiRef.current?.updateScene({ appState: { viewBackgroundColor: n } as any });
+  }, []);
 
   const setLanguage = useCallback((l: "zh-CN" | "en") => {
     setLang(l);
@@ -110,6 +167,13 @@ export default function CanvasApp() {
   // 官方在 mount 后回调 api、unmount 时传 null —— 类型按官方签名放宽为可空
   const handleApi = useCallback((api: ExcalidrawImperativeAPI | null) => {
     apiRef.current = api;
+    if (!api) return;
+    // 恢复上次选定的画布底色（仅在用户确实选过时写入；否则保持官方默认）
+    const stored = bgRef.current;
+    if (stored) {
+      const cur = normalizeHex((api.getAppState() as any)?.viewBackgroundColor);
+      if (cur !== stored) api.updateScene({ appState: { viewBackgroundColor: stored } as any });
+    }
   }, []);
 
   // 上行成功后清 dirty（由 SyncClient 状态驱动——简化：flush 后延迟清理）
@@ -132,6 +196,8 @@ export default function CanvasApp() {
 
   return (
     <div style={{ height: "100%" }}>
+      {/* 官方菜单没有扩展点：在「Excalidraw links」里追加二开仓库链接（细节见组件注释） */}
+      <ExtraMenuLinks lang={lang} />
       <Excalidraw
         // 官方 prop 名是 onExcalidrawAPI（运行时只调用 props.onExcalidrawAPI?.(api)）；
         // 曾误写成 excalidrawAPI —— 那是 ExcalidrawMountPayload 的字段名，不是组件 prop，
@@ -141,7 +207,11 @@ export default function CanvasApp() {
         // 官方 prop 是 langCode（Language["code"] 类型，如 "en" / "zh-CN"）；
         // 没有 lang 这个 prop，写 lang 会被直接忽略（语言切换静默失效）。
         langCode={lang}
-        theme="light"
+        // 官方主题：传了就声明"主题由宿主控制"（官方菜单里的切换项不出现），
+        // 因此这里接我们的三态按钮（浅色/深色/跟随系统）。
+        // 注意：官方会同步 exportWithDarkMode = (theme === DARK)，
+        // 所以深色主题下导出图片自动跟随深色，不需要（也不应该）额外写白底。
+        theme={theme}
         name="Excalidraw-Workspace-Canvas"
         UIOptions={{
           canvasActions: {
@@ -150,6 +220,8 @@ export default function CanvasApp() {
             export: { saveFileToDisk: true },
             saveAsImage: true,
             clearCanvas: true,
+            // 保留官方自带的画布底色取色器（我们的色块是它的快捷入口，两者写同一字段）
+            changeViewBackgroundColor: true,
             // 注：原先还写了 logState / changeCanvasBackground —— 官方 UIOptions.canvasActions
             // 在 0.18 只允许 changeViewBackgroundColor / clearCanvas / export / loadScene /
             // saveToActiveFile / toggleTheme / saveAsImage 这几项，其余会被忽略。
@@ -157,16 +229,21 @@ export default function CanvasApp() {
           },
         }}
         renderTopRightUI={() => (
-          <div style={{ display: "flex", alignItems: "center" }}>
+          <div style={toolbarRow}>
             <AgentTools lang={lang} />
+            <SaveTargets lang={lang} getApi={() => apiRef.current} />
             <UpstreamBadge lang={lang} />
+            <ThemeToggle mode={themeMode} lang={lang} onCycle={cycleTheme} />
+            <BackgroundPicker
+              color={bg ?? "#ffffff"}
+              dark={isDarkTheme(theme)}
+              lang={lang}
+              onPick={pickBackground}
+            />
             <button
               title="中文 / English"
               onClick={() => setLanguage(lang === "zh-CN" ? "en" : "zh-CN")}
-              style={{
-                marginLeft: 6, border: "none", borderRadius: 4, padding: "6px 10px",
-                cursor: "pointer", fontSize: 14, backgroundColor: "#e9ecef", fontFamily: "inherit",
-              }}>
+              style={toolbarButton}>
               {lang === "zh-CN" ? "EN" : "中"}
             </button>
           </div>
