@@ -132,3 +132,32 @@ npm run build:canvas
 
 新增 `canvas-web/src/upstream-core.test.mjs`（`node:test`，`npm test` 一并运行），用**合成 API 数据**覆盖真实环境难复现的分支：限流（含 `x-ratelimit-reset` 解析）、已发布新构建、`pickLatestBuild` 的 `next` 优先级，以及**「本地 pin 比已发布构建更新」时不得误报可升级**的防护。当前 14 项测试全绿（原 4 项 auth + 新增 10 项）。
 
+## 6. 外观接入（主题 / 画布底色 / 导出）
+
+**结论：官方原生支持深色模式，且它与「背景色」是两条独立轴**（本项目 2026-09-24 按此实现）。
+
+### 官方事实（读 `dist/dev/index.js` 源码核对，非推测）
+
+| 事项 | 事实 |
+|---|---|
+| 主题接口 | `theme?: "light" \| "dark"`（官方 `THEME` 常量）；`onThemeChange(theme \| "system")` 额外给出 `system` 语义 |
+| 宿主控制语义 | 官方注释：`toggleTheme` 默认 true，**若传了 `props.theme` 或提供 `onThemeChange` 则视为宿主接管**，官方菜单里的切换项不再出现 |
+| UI 深色实现 | `.theme--dark` 类 + CSS 变量体系：`index.css` 共 235 个自定义属性，其中 **84 个**在 `.theme--dark` 规则下被重定义；容器底色为 `#121212` |
+| 画布内容深色 | 渲染器对颜色调用官方 `applyDarkModeFilter(color, isDark)`（等价于 `DARK_THEME_FILTER`：先 invert(93%) 再 hue-rotate(180deg)），**不是**只改底色 |
+| 画布底色深色 | 已由源码确认：`Renderer` 的 `bootstrapCanvas()` 里 `context.fillStyle = applyDarkModeFilter(viewBackgroundColor, theme === THEME.DARK)` —— **深色主题下画布底色同样被反色**（因此色块预览做成反色后才是"所见即所得"）。该方法还会把 `"transparent"` 与非 `#rgb/#rrggbb` 字符串走 `clearRect` 分支（即支持透明底色） |
+| 背景色字段 | `appState.viewBackgroundColor`（渲染器以 `canvasBackgroundColor` 消费）；官方键名是 `UIOptions.canvasActions.changeViewBackgroundColor` |
+| 导出与主题 | 组件在初始化与主题变化时自动同步 `exportWithDarkMode = (theme === DARK)`；导出对话框另有独立开关（写 `sessionExportThemeOverride`，不改宿主主题） |
+| 导出背景 | 导出使用 `appState.exportBackground` + `viewBackgroundColor`；官方只对 JPEG 强制 `exportBackground: true` |
+
+### 本项目实现
+
+- `canvas-web/src/appearance.mjs`（纯逻辑 SSOT，配 `.d.mts` 类型声明）：主题三态循环与解析、色值规范化、色块常量。**刻意不导入 `@excalidraw/*`** —— 它要被 `node --test` 直接加载，浏览器包在 Node 里加载会失败；官方依赖只在 UI 层引入。
+- `canvas-web/src/appearance-controls.tsx`：主题按钮 + 底色取色器（8 色块 + 自定义 `#rrggbb`）。配色全部走官方 CSS 变量（`--island-bg-color` / `--text-primary-color` / `--color-border-outline` 等），因此**自动跟随深色主题**，无需维护两套配色。
+- 底色写入走官方字段 `updateScene({ appState: { viewBackgroundColor } })`；同时**保留官方自带取色器**（`changeViewBackgroundColor: true`）—— 我们的色块是同一字段的快捷入口，不是平行逻辑。
+- **不再自动写白色底色**：未选择时沿用官方默认（不注入）；选择后导出即用该底色。深色主题下导出由官方的 `exportWithDarkMode` 自动同步，保持深色而不会强制白底。
+- `:5002` 纯官方壳**刻意不传 `theme`**：按官方注释，此时主题归官方 UI 管，官方菜单里会出现主题切换项。
+- 色板为 **7 种浅色 + 末位纯黑**。官方 `DEFAULT_CANVAS_BACKGROUND_PICKS` 只有 5 个浅色候选、无黑色，本项目在官方 `COLOR_PALETTE` 内再补 2 个浅色档（green[0] `#ebfbee`、violet[0] `#f3f0ff`）凑满 7 浅，最后放纯黑 `#000000`（官方 `COLOR_PALETTE.black` 实为 `#1e1e1e`）。
+
+### 已知边界
+
+- 主题与底色都是**每浏览器本地**（localStorage）：同步链路只同步元素、不同步 appState，因此多端之间底色与主题不共享。

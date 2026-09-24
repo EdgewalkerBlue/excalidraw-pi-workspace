@@ -17,7 +17,10 @@
 
 > **GitHub 项目简介** — *Excalidraw ⇄ AI 双向协作工作台：在 Excalidraw 官方 master 底层的无限画布上画出结构化需求，经 MCP CLI + Review Gate 发送给 Pi Coding Agent，并把执行结果回写到画布。*
 >
-> Topics：`excalidraw` · `mcp` · `model-context-protocol` · `ai-agent` · `infinite-canvas` · `react` · `typescript` · `pwa` · `human-ai-collaboration`
+> 仓库 About 里实际使用的是中英双语合并版（283 字符）：
+> `Excalidraw × Pi Agent 双向协作工作区：在官方 Excalidraw 无限画布上画结构化需求，经 MCP CLI + Review Gate 交给 AI 编码 Agent 执行，并将结果回写画布。 | Bidirectional Excalidraw ⇄ AI coding-agent workspace: sketch requirements on an official-master canvas, dispatch them via MCP CLI + Review Gate, and write the results back.`
+>
+> Topics（已在仓库上设置）：`excalidraw` · `mcp` · `model-context-protocol` · `ai-agent` · `ai-coding-agent` · `infinite-canvas` · `react` · `typescript` · `pwa` · `human-in-the-loop` · `self-hosted` · `webdav`
 
 自托管的 Excalidraw 无限画布，把「画图」变成**可执行需求**：画布上的节点 + 箭头绑定（Arrow Binding）一键发给 Pi Coding Agent，经 Approve / Reject 与 Review Gate 门禁后执行，并回写画布。
 
@@ -68,6 +71,8 @@
 | 无限画布 | 官方 Excalidraw 完整能力：缩放平移、触摸、手写笔、图形/文本/图片、箭头 |
 | 箭头绑定 | 起点/终点/binding/标签完整保留 —— Agent 读取的结构化语义 |
 | 界面语言 | 跟随浏览器语言（`zh*` → 简体中文，其余英文），通过官方 `langCode` prop 生效；工具条按钮可切换，偏好记在 `localStorage`（按 origin 隔离） |
+| 主题 | 工具条按钮循环 浅色 → 深色 → 跟随系统（会持久化）。走官方 `theme` prop，整套 UI 用官方深色主题（235 个 CSS 变量，其中 84 个在 `.theme--dark` 下被重定义），画布内容由官方 `applyDarkModeFilter` 重新着色 |
+| 画布背景色 | 工具条取色器：**7 种浅色 + 末位纯黑**，另有自定义 `#rrggbb` 输入；写入官方 `appState.viewBackgroundColor`（官方自带的背景取色器在 File 菜单里仍然可用）。**导出图片使用该底色，不再强制白底** |
 | 画布持久化 | 服务端落盘，覆盖前轮转备份（保留 20 份）；`.excalidraw` 归档留本地（已 gitignore） |
 | Send to Agent | 工具条按钮通知 Pi，绿色「已发送」反馈 |
 | Send to Task Set | 把画布各项目框内的未完成任务写入对应项目 `.pi/task_set.json`（按标题去重、按优先级排序） |
@@ -75,8 +80,10 @@
 | Pi 实时通知 | 扩展监听标记文件：TUI 弹窗 + 收件箱组件 + 自动触发 |
 | Review Gate | 执行前生成门禁报告（节点/箭头差异、范围、计划动作），破坏性操作需二次确认 —— 见 [GATE.md](GATE.md) |
 | MCP CLI 桥接 | `mcp-cli.bat describe/add/update/delete/export/import` |
+| 保存目标 | 工具条 **「保存到…」**：本地 `.excalidraw`（走官方 `serializeAsJSON`）、**WebDAV**（坚果云 / Nextcloud / 群晖…）、以及 **Dropbox / Google Drive / OneDrive** 的 OAuth 2.0 + PKCE 直传；另有百度网盘 / 阿里云盘 / 夸克 / 微云的「导出 + 打开上传页」快捷入口。见 [保存到网盘](#保存到网盘) |
 | 认证（可选） | Basic Auth 代理 + WebSocket 转发 |
 | 上游自检 | 画布右上角徽标提示官方是否有新构建 |
+| 二开仓库入口 | 汉堡菜单「Excalidraw links」区里，官方 GitHub **下方**多一条二开仓库链接（官方菜单没有扩展点，故采用范围可控的 DOM 注入 —— 见 `canvas-web/src/extra-menu-links.mjs`） |
 
 > **2026-09-23 随前端切换到 `canvas-web/` 而退役**（见 [legacy/README.md](legacy/README.md)）：**frame 边框色色板**（原在 `webui/send-to-agent.js`）与**跨入口语言记忆（cookie）**（原在 `tools/patch-i18n.mjs`）。语言偏好现在只按 origin 存 `localStorage`。
 
@@ -186,6 +193,7 @@ netsh advfirewall firewall add rule name="Excalidraw Workspace 5001" dir=in acti
 ```bash
 npm run typecheck      # tsc 覆盖 src/ 与 canvas-web/src
 npm run build:canvas   # 重建 canvas-web 到 Canvas Server 静态目录
+npm run build:canvas:safe   # 同上，但先构建到临时目录再整体替换（目标被占用/半残时更安全）
 npm run dev:canvas     # canvas-web 开发服务器（:5004）
 npm run ship -- -m "feat: xxx"   # 提交 → 推 DEV → 合并 master → 自动切回 DEV
 mcp-cli.bat describe | add | update <id> --set '{...}' | delete <id...>
@@ -195,6 +203,33 @@ node tools/exec-log.mjs list | rollback                 # 执行日志 / 回滚
 node tools/patch-server.mjs                             # 落盘补丁（启动时自动执行）
 node tools/fix-canvas-indices.mjs --server http://127.0.0.1:5001
 ```
+
+## 保存到网盘
+
+官方那个「保存到…」对话框的卡片是**硬编码**的（只有本地卡片与一个可选的分享链接卡片，**没有扩展点**），所以本项目在工具条上自建入口。所有联网动作都交给一个本机中转服务：浏览器无法直接调 WebDAV / 网盘接口（跨域），且授权码换 token 不该放在页面里。
+
+```
+浏览器（画布）  --HTTP-->  save-bridge  :5011  --HTTPS-->  WebDAV / Dropbox / Google Drive / OneDrive
+```
+
+| 组成 | 位置 | 说明 |
+|---|---|---|
+| 中转服务 | `tools/save-bridge.mjs`（`:5011`） | 由 `start-canvas.bat` 启动；默认只监听 `127.0.0.1` |
+| 纯逻辑（规格 / PKCE / URL 构造） | `tools/save-targets.mjs` | 离线单测覆盖，含 RFC 7636 官方测试向量 |
+| 凭据与 token | `.save-targets.json` | **已 gitignore**；接口永不回传 WebDAV 密码 |
+| 回归检查 | `node tools/save-bridge.integration.mjs` | 配合 `tools/dev-stub-webdav.mjs` 的桩服务器，不需要真实网盘 |
+
+**WebDAV** —— 不需要注册任何应用。打开「保存到…」，填地址 / 用户名 / 应用密码，点**测试连接**，再点**保存到 WebDAV**。坚果云（`https://dav.jianguoyun.com/dav/`）、Nextcloud、群晖、TeraCLOUD 等都能用。
+
+**Dropbox / Google Drive / OneDrive** —— 各需一次性注册应用，回调地址填中转服务的：
+
+```
+http://127.0.0.1:5011/oauth/callback        # 其他设备访问时用 http://<主机局域网IP>:5011/oauth/callback
+```
+
+把拿到的 `client_id` 粘进对话框，点**授权**，之后即可**保存到此处**。走 PKCE 公共客户端流程，**不使用也不保存 `client_secret`**，token 过期自动刷新。
+
+> **安全默认**：中转服务只监听 `127.0.0.1`。若要手机等设备也能保存，需设 `SAVE_BRIDGE_HOST=0.0.0.0`，并清楚此时局域网内任何人都能访问这些上传接口。
 
 ## 分支与发布流程
 

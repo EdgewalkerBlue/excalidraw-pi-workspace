@@ -17,7 +17,7 @@
 
 > **GitHub About** — *Bidirectional Excalidraw ⇄ AI workspace: draw structured requirements on an official-master Excalidraw infinite canvas, send them to the Pi Coding Agent via MCP CLI + Review Gate, and write the results back onto the canvas.*
 >
-> Topics: `excalidraw` · `mcp` · `model-context-protocol` · `ai-agent` · `infinite-canvas` · `react` · `typescript` · `pwa` · `human-ai-collaboration`
+> Topics (as set on the repo): `excalidraw` · `mcp` · `model-context-protocol` · `ai-agent` · `ai-coding-agent` · `infinite-canvas` · `react` · `typescript` · `pwa` · `human-in-the-loop` · `self-hosted` · `webdav`
 
 A self-hosted Excalidraw infinite canvas that turns drawings into **executable requirements**: node + Arrow Binding structures on the canvas are sent to the Pi Coding Agent in one click, gated by Approve / Reject + Review Gate, executed, and written back onto the canvas.
 
@@ -68,6 +68,8 @@ A self-hosted Excalidraw infinite canvas that turns drawings into **executable r
 | Infinite canvas | Full official Excalidraw feature set: zoom/pan, touch, stylus, shapes/text/images, arrows |
 | Arrow Binding | Source/target/binding/label preserved — the structured semantics the agent reads |
 | UI language | Follows the browser language (`zh*` → Simplified Chinese, otherwise English) through the official `langCode` prop; the toolbar button switches it and remembers the choice in `localStorage` (per origin) |
+| Theme | Toolbar button cycles light → dark → system (persisted). Uses the official `theme` prop, so the whole UI follows the official dark theme (235 CSS custom properties, 84 of them redefined under `.theme--dark`) while canvas content is recoloured by the official `applyDarkModeFilter` |
+| Canvas background | Toolbar picker: **7 light swatches plus pure black** and a custom `#rrggbb` field, written through the official `appState.viewBackgroundColor` (the official background picker stays available in the File menu). Exports use this colour instead of a forced white background |
 | Persistence | Server-side save with rotating backups before overwrite (20 kept); `.excalidraw` archives stay local (`*.excalidraw` is gitignored) |
 | Send to Agent | Toolbar button → notifies Pi, green "sent" feedback |
 | Send to Task Set | Writes unfinished tasks from canvas frames into each project's `.pi/task_set.json` (dedup by title, priority-sorted) |
@@ -75,8 +77,10 @@ A self-hosted Excalidraw infinite canvas that turns drawings into **executable r
 | Pi live notifications | Extension watches marks: TUI popup + inbox widget + auto-trigger |
 | Review Gate | Pre-execution report (node/arrow diffs, scope, planned actions); destructive ops need extra confirmation — see [GATE.md](GATE.md) |
 | MCP CLI bridge | `mcp-cli.bat describe/add/update/delete/export/import` |
+| Save targets | Toolbar **“Save to…”** dialog: local `.excalidraw` file (via the official `serializeAsJSON`), **WebDAV** (Jianguoyun / Nextcloud / Synology …), and direct upload to **Dropbox / Google Drive / OneDrive** over OAuth 2.0 + PKCE; plus “export + open upload page” shortcuts for Baidu / Aliyun / Quark / Weiyun. See [Saving to cloud drives](#saving-to-cloud-drives) |
 | Auth (optional) | Basic Auth proxy + WebSocket forwarding |
 | Upstream self-check | Top-right badge in the canvas flags newer official builds |
+| Fork repo link | The hamburger menu’s *Excalidraw links* section gains a **fork GitHub** entry right below the official one (the official menu has no extension point, so this is a scoped DOM injection — see `canvas-web/src/extra-menu-links.mjs`) |
 
 > **Retired 2026-09-23** when the frontend moved to `canvas-web/` (see [legacy/README.md](legacy/README.md)): the **frame border-color palette** (lived in `webui/send-to-agent.js`) and **cross-entry language memory via cookie** (lived in `tools/patch-i18n.mjs`). Language preference is now per-origin `localStorage` only.
 
@@ -186,6 +190,7 @@ netsh advfirewall firewall add rule name="Excalidraw Workspace 5001" dir=in acti
 ```bash
 npm run typecheck      # tsc over src/ and canvas-web/src
 npm run build:canvas   # rebuild canvas-web into the Canvas Server static dir
+npm run build:canvas:safe   # same, but build to a temp dir then swap (safe when the target is locked/partial)
 npm run dev:canvas     # canvas-web dev server on :5004
 npm run ship -- -m "feat: xxx"   # commit -> push DEV -> merge master -> auto-return to DEV
 mcp-cli.bat describe | add | update <id> --set '{...}' | delete <id...>
@@ -195,6 +200,33 @@ node tools/exec-log.mjs list | rollback                 # execution log / rollba
 node tools/patch-server.mjs                             # persistence patch (auto-run on start)
 node tools/fix-canvas-indices.mjs --server http://127.0.0.1:5001
 ```
+
+## Saving to cloud drives
+
+The official “Save to…” dialog ships **hardcoded cards** (`saveToActiveFile` and an optional `onExportToBackend` share-link card) with no extension point, so this project adds its own **Save to…** entry in the toolbar. Everything network-related goes through a small local bridge service, because browsers cannot call WebDAV/cloud APIs directly (CORS) and OAuth code exchange should not live in the page.
+
+```
+Browser (canvas)  --HTTP-->  save-bridge  :5011  --HTTPS-->  WebDAV / Dropbox / Google Drive / OneDrive
+```
+
+| Piece | Where | Notes |
+|---|---|---|
+| Bridge service | `tools/save-bridge.mjs` (`:5011`) | Started by `start-canvas.bat`; binds `127.0.0.1` only by default |
+| Pure logic (specs, PKCE, URL builders) | `tools/save-targets.mjs` | Unit-tested offline, incl. the RFC 7636 test vector |
+| Credentials & tokens | `.save-targets.json` | **gitignored**; the API never returns the WebDAV password |
+| Regression check | `node tools/save-bridge.integration.mjs` | Runs against `tools/dev-stub-webdav.mjs` — no real cloud needed |
+
+**WebDAV** — no app registration required. Open *Save to…*, fill in URL / username / app password, press **Test**, then **Save to WebDAV**. Works with Jianguoyun (`https://dav.jianguoyun.com/dav/`), Nextcloud, Synology, TeraCLOUD, and anything else speaking WebDAV.
+
+**Dropbox / Google Drive / OneDrive** — each needs a one-time app registration; the redirect URI must be the bridge callback:
+
+```
+http://127.0.0.1:5011/oauth/callback        # or http://<host-LAN-IP>:5011/oauth/callback for other devices
+```
+
+Paste the resulting `client_id` in the dialog, press **Authorise**, then **Save here**. PKCE public-client flow — no `client_secret` is used or stored. Tokens refresh automatically.
+
+> **Security default**: the bridge listens on `127.0.0.1` only. Set `SAVE_BRIDGE_HOST=0.0.0.0` if you want to save from a phone, and be aware that anyone on your LAN can then reach the upload endpoints.
 
 ## Branching & Release Flow
 
