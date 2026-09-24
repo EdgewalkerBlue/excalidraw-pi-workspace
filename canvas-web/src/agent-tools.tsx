@@ -1,6 +1,7 @@
 // Agent 协作工具条（二开功能，替代旧 DOM 注入脚本 send-to-agent.js）
 // 协议与 tools/agent-notify.mjs（:5010）对齐：notify/approve/reject/task-set/snapshot/health
 import { useCallback, useEffect, useRef, useState } from "react";
+import { toolbarButtonColored, toolbarRow } from "./toolbar-style";
 
 const NOTIFY_BASE = `//${location.hostname}:5010`;
 const BLUE = "#1971c2", GREEN = "#2f9e44", YELLOW = "#f08c00", RED = "#e03131";
@@ -26,11 +27,9 @@ async function elementCount(): Promise<number> {
   } catch { return -1; }
 }
 
-const btn = (bg: string, extra?: React.CSSProperties): React.CSSProperties => ({
-  backgroundColor: bg, color: "#fff", border: "none", borderRadius: 4,
-  padding: "6px 12px", marginLeft: 6, cursor: "pointer", fontSize: 14,
-  fontFamily: "inherit", ...extra,
-});
+// 尺寸统一走 toolbar-style（30px 高、单行、间距靠容器 gap）
+const btn = (bg: string, extra?: React.CSSProperties): React.CSSProperties =>
+  toolbarButtonColored(bg, extra);
 
 export default function AgentTools({ lang }: { lang: "zh-CN" | "en" }) {
   const t = (zh: string, en: string) => (lang === "zh-CN" ? zh : en);
@@ -111,7 +110,7 @@ export default function AgentTools({ lang }: { lang: "zh-CN" | "en" }) {
   };
 
   return (
-    <div style={{ display: "flex", alignItems: "center", padding: "0 4px" }}>
+    <div style={toolbarRow}>{/* 间距与高度由 toolbar-style 统一 */}
       <button style={btn(sendState === "sent" ? GREEN : sendState === "error" ? RED : BLUE)}
         disabled={sendState === "busy"}
         onClick={() => { void sendToAgent(); }}

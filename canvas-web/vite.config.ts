@@ -20,6 +20,9 @@ export default defineConfig({
       date: "2026-09-16",
       version: "0.18.0-c0ad61c",
     }),
+    // 二开仓库地址：注入到官方菜单「Excalidraw links」里的自建链接（见 src/extra-menu-links.tsx）。
+    // 换仓库/迁移时只改这一处。
+    __FORK_REPO_URL__: JSON.stringify(process.env.FORK_REPO_URL || "https://github.com/EdgewalkerBlue/excalidraw-pi-workspace"),
   },
   build: {
     outDir: path.resolve(here, "../node_modules/mcp-excalidraw-server/dist/frontend"),

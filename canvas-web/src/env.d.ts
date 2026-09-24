@@ -6,3 +6,6 @@ declare const __CANVAS_BASELINE__: {
   /** 该快照对应的官方 npm 构建版本号，如 0.18.0-c0ad61c */
   version?: string;
 };
+
+/** 二开仓库地址（构建期由 canvas-web/vite.config.ts 注入），用于官方菜单里的自建链接 */
+declare const __FORK_REPO_URL__: string;

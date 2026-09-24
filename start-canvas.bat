@@ -37,6 +37,16 @@ if not errorlevel 1 (
   echo [START] Agent notify service :5010 - background
 )
 
+rem ---- 2.5) Save bridge (hidden background, 127.0.0.1:5011) ----
+rem      Handles WebDAV uploads and cloud-drive OAuth (tokens stay local, see .save-targets.json).
+netstat -ano | findstr /r /c:":5011 .*LISTENING" >nul 2>&1
+if not errorlevel 1 (
+  echo [INFO] Save bridge already running on :5011, skip.
+) else (
+  powershell -NoProfile -Command "Start-Process -FilePath 'node' -ArgumentList 'tools\save-bridge.mjs' -WorkingDirectory '%cd%' -WindowStyle Hidden" >nul 2>&1
+  echo [START] Save bridge :5011 - background
+)
+
 rem ---- 3) Canvas server (hidden background, 0.0.0.0:5001) ----
 set PORT=5001
 set HOST=0.0.0.0
