@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Excalidraw } from "@excalidraw/excalidraw";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
-import { SyncClient, fetchScene, getClientId, type CanvasElement } from "./sync";
+import { SyncClient, fetchScene, getClientId, type AppearanceSync, type CanvasElement, type SyncRejectInfo } from "./sync";
 import AgentTools from "./agent-tools";
 import UpstreamBadge from "./upstream-badge";
 import SaveTargets from "./save-targets";
@@ -60,13 +60,36 @@ export default function CanvasApp() {
   const bgRef = useRef<string | null>(bg);
   bgRef.current = bg;
 
-  const cycleTheme = useCallback(() => {
-    setThemeMode((m) => {
-      const next = nextThemeMode(m);
-      try { localStorage.setItem(THEME_KEY, next); } catch { /* ignore */ }
-      return next;
-    });
+  // 外观多端一致（T-20260924-001）：本地改动 → POST /api/appearance（服务端落盘 +
+  // 广播各端）；收到广播/首载拉取 → 应用远端值。localStorage 保留为即时缓存与离线回退。
+  const pushAppearance = useCallback((patch: { theme?: string; viewBackgroundColor?: string }) => {
+    fetch("/api/appearance", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    }).catch(() => { /* 旧 server 无此端点/离线：保持本地外观，不阻塞 */ });
   }, []);
+
+  const applyRemoteAppearance = useCallback((a: AppearanceSync) => {
+    if (a.theme) {
+      const m = parseThemeMode(a.theme);
+      setThemeMode(m);
+      try { localStorage.setItem(THEME_KEY, m); } catch { /* ignore */ }
+    }
+    const hex = a.viewBackgroundColor ? normalizeHex(a.viewBackgroundColor) : null;
+    if (hex) {
+      setBg(hex);
+      try { localStorage.setItem(BG_KEY, hex); } catch { /* ignore */ }
+      apiRef.current?.updateScene({ appState: { viewBackgroundColor: hex } as any });
+    }
+  }, []);
+
+  const cycleTheme = useCallback(() => {
+    const next = nextThemeMode(themeMode);
+    setThemeMode(next);
+    try { localStorage.setItem(THEME_KEY, next); } catch { /* ignore */ }
+    pushAppearance({ theme: next });
+  }, [themeMode, pushAppearance]);
 
   const pickBackground = useCallback((hex: string) => {
     const n = normalizeHex(hex);
@@ -75,7 +98,8 @@ export default function CanvasApp() {
     try { localStorage.setItem(BG_KEY, n); } catch { /* ignore */ }
     // 走官方字段：与官方取色器 actionChangeViewBackgroundColor 写的是同一个 appState
     apiRef.current?.updateScene({ appState: { viewBackgroundColor: n } as any });
-  }, []);
+    pushAppearance({ viewBackgroundColor: n });
+  }, [pushAppearance]);
 
   const setLanguage = useCallback((l: "zh-CN" | "en") => {
     setLang(l);
@@ -84,10 +108,35 @@ export default function CanvasApp() {
 
   // 本端是否拥有未上传的编辑：元素 updated 晚于上次上行时间，或不在已同步集合
   const dirtyIdsRef = useRef<Set<string>>(new Set());
+  // 首载场景暂存：fetchScene / WS initial 的到达时机与 Excalidraw 挂载完成时机无序，
+  // 且 **在 onExcalidrawAPI 回调内（挂载中途）调 updateScene 会被官方随后的初始化整个
+  // 冲掉**（2026-09-26 实测：applyFrom=handleApi-pending、无报错、场景仍为 0）——
+  // 这就是「刷新后画布全空 → 新画元素被缩水闸门 409 挡回 → frame 刷新即消失」的根因。
+  // 因此初始场景一律先暂存，统一推迟到「第一次 onChange」（= 官方初始化完成的可靠
+  // 信号）再应用；晚到且挂载已完成的（firstChange 已过）仍走立即应用。
+  const pendingInitialRef = useRef<CanvasElement[] | null>(null);
+  const firstChangeRef = useRef(false);
+
+  // 缩水闸门提示（T-20260923-006）：上行被拒时置顶横幅可见，恢复后清除
+  const [syncWarn, setSyncWarn] = useState<string | null>(null);
+  const handleSyncRejected = useCallback((info: SyncRejectInfo) => {
+    setSyncWarn(
+      info.kind === "shrunk-server"
+        ? (info.message || `服务端拒绝上行：本端场景（${info.localCount ?? "?"}）远小于服务端（${info.serverCount ?? "?"}），已暂停同步以保护画布数据`)
+        : `本端场景异常缩水（${info.localCount ?? "?"} / 上次 ${info.serverCount ?? "?"}），已暂停上行与删除，等待场景回填（必要时请刷新页面）`,
+    );
+  }, []);
+  const handleSyncRecovered = useCallback(() => setSyncWarn(null), []);
 
   const applyInitial = useCallback((incoming: CanvasElement[]) => {
     const api = apiRef.current;
-    if (!api) return;
+    // 挂载未完成（api 未回调或还没见到第一次 onChange）：暂存，等 handleChange 里应用。
+    // 绝不在挂载中途 updateScene —— 会被官方初始化冲掉（见 pendingInitialRef 注释）。
+    if (!api || !firstChangeRef.current) {
+      pendingInitialRef.current = incoming;
+      return;
+    }
+    pendingInitialRef.current = null;
     // 与本地未同步编辑合并：incoming 全量 + 本地 dirty 元素按 id 覆盖（本地新编辑胜）
     const dirty = dirtyIdsRef.current;
     if (dirty.size === 0) {
@@ -134,14 +183,34 @@ export default function CanvasApp() {
       onCreated: applyElementUpsert,
       onUpdated: applyElementUpsert,
       onDeleted: applyElementDelete,
+      onRejected: handleSyncRejected,
+      onRecovered: handleSyncRecovered,
+      onAppearance: applyRemoteAppearance,
     });
     syncRef.current = sync;
 
     void (async () => {
       try {
         const els = await fetchScene();
-        if (mounted && apiRef.current) apiRef.current.updateScene({ elements: els as any });
+        if (!mounted) return;
+        if (apiRef.current) {
+          applyInitial(els); // 走 applyInitial：统一受 firstChange 闸门（未就绪则暂存）
+        } else {
+          pendingInitialRef.current = els; // api 未就绪：暂存，第一次 onChange 时应用
+        }
+        sync.markSceneLoaded(); // HTTP 首载成功即释放首连闸门（场景数据已在手，应用可稍后）
       } catch { /* server 不可达时等 WS */ }
+    })();
+
+    // 首载拉取共享外观（多端一致；旧 server 无此端点时保持本地值）
+    void (async () => {
+      try {
+        const r = await fetch("/api/appearance", { cache: "no-store" });
+        const j = await r.json();
+        if (mounted && j?.success && j.appearance && (j.appearance.theme || j.appearance.viewBackgroundColor)) {
+          applyRemoteAppearance(j.appearance);
+        }
+      } catch { /* 端点缺失/离线：保持本地外观 */ }
     })();
 
     sync.start();
@@ -152,22 +221,36 @@ export default function CanvasApp() {
       window.removeEventListener("beforeunload", beforeUnload);
       sync.destroy();
     };
-  }, [applyInitial, applyElementUpsert, applyElementDelete]);
+  }, [applyInitial, applyElementUpsert, applyElementDelete, handleSyncRejected, handleSyncRecovered, applyRemoteAppearance]);
 
   const handleChange = useCallback((elements: readonly any[]) => {
     const sync = syncRef.current;
     if (!sync) return;
+    const firstChange = !firstChangeRef.current;
+    firstChangeRef.current = true;
     // 记录本地 dirty（onChange 的元素 = 本地编辑）
     const dirty = dirtyIdsRef.current;
     if (dirty.size > 500) dirty.clear(); // 防御性上限
     for (const e of elements) dirty.add(e.id);
+    // 第一次 onChange = 官方初始化完成：此刻应用暂存的首载场景（若有）。
+    // 应用后以「合并结果的真实场景」上行，而不是 onChange 带来的旧数组。
+    const pending = pendingInitialRef.current;
+    if (firstChange && pending) {
+      pendingInitialRef.current = null;
+      applyInitial(pending);
+      const api = apiRef.current;
+      sync.scheduleSync([...(api ? (api.getSceneElementsIncludingDeleted() as any[]) : elements)]);
+      return;
+    }
     sync.scheduleSync([...elements]);
-  }, []);
+  }, [applyInitial]);
 
   // 官方在 mount 后回调 api、unmount 时传 null —— 类型按官方签名放宽为可空
   const handleApi = useCallback((api: ExcalidrawImperativeAPI | null) => {
     apiRef.current = api;
     if (!api) return;
+    // 注意：这里【不要】应用暂存的首载场景 —— 本回调发生在挂载中途，此刻 updateScene
+    // 会被官方随后的初始化冲掉；统一等第一次 onChange（见 handleChange / applyInitial）。
     // 恢复上次选定的画布底色（仅在用户确实选过时写入；否则保持官方默认）
     const stored = bgRef.current;
     if (stored) {
@@ -196,6 +279,19 @@ export default function CanvasApp() {
 
   return (
     <div style={{ height: "100%" }}>
+      {/* 缩水闸门提示：上行被拒时可见（恢复后自动消失） */}
+      {syncWarn && (
+        <div
+          role="alert"
+          style={{
+            position: "fixed", top: 10, left: "50%", transform: "translateX(-50%)",
+            zIndex: 9999, maxWidth: "80%", background: "#b3550e", color: "#fff",
+            padding: "6px 14px", borderRadius: 8, fontSize: 13,
+            boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
+          }}>
+          {syncWarn}
+        </div>
+      )}
       {/* 官方菜单没有扩展点：在「Excalidraw links」里追加二开仓库链接（细节见组件注释） */}
       <ExtraMenuLinks lang={lang} />
       <Excalidraw

@@ -121,7 +121,7 @@ async function main() {
     }
     if (result.command) console.log(` 升级命令     : ${result.command}`);
     if (errors.length) console.log(` 网络告警     : ${errors.join(" | ")}`);
-    console.log(" 画布 WebUI 每 24h 自检一次，有新构建时右上角徽标会自动变黄。");
+    console.log(" 画布 WebUI 每 24h 自检一次，有新构建时右上角徽标会自动变黄；点击徽标即可一键自动更新（安装+重构建）。");
   }
 
   process.exitCode = result.state === "build-available" || drift ? 1 : 0;

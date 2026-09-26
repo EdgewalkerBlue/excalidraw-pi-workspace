@@ -54,6 +54,8 @@ export const UPSTREAM_ENDPOINTS: {
   head: string;
   compare: (baseSha: string) => string;
   npmTags: string;
+  /** npm dist-tags 的浏览器侧同源代理（registry 无 CORS 头，直连必被拦） */
+  npmTagsProxy: string;
 };
 
 export const CHECK_INTERVAL: number;
