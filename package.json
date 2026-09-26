@@ -20,7 +20,7 @@
     "build:canvas:safe": "node tools/deploy-canvas-build.mjs"
   },
   "dependencies": {
-    "@excalidraw/excalidraw": "0.18.0-c0ad61c",
+    "@excalidraw/excalidraw": "0.18.0-1118751",
     "mcp-excalidraw-server": "^2.0.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"

@@ -14,6 +14,10 @@ export const UPSTREAM_ENDPOINTS = {
   compare: (baseSha) =>
     `https://api.github.com/repos/excalidraw/excalidraw/compare/${baseSha}...master`,
   npmTags: "https://registry.npmjs.org/-/package/@excalidraw/excalidraw/dist-tags",
+  // npm registry 的 dist-tags 接口不带 CORS 头，浏览器直连必被拦（徽标因此永远到不了
+  // build-available 态）——浏览器侧走画布服务器的同源代理（patch-server 注入端点），
+  // CLI（tools/check-upstream.mjs）不受 CORS 限制，仍用 npmTags 直连。
+  npmTagsProxy: "/api/upstream/npm-tags",
 };
 
 /** 检查节流周期（浏览器侧） */
@@ -112,8 +116,8 @@ export function assess(baseline, fetched = {}) {
     result.command = `npm install @excalidraw/excalidraw@${build.version} && npm run build:canvas`;
     result.short = { zh: `官方新构建 ${build.version}`, en: `new build ${build.version}` };
     result.title = {
-      zh: `画布底层官方已有新构建：${baseline.version || baseLabel} → ${build.version}（master ${headLabel}）。\n升级：${result.command}，然后重启画布服务（stop-canvas.bat → start-canvas.bat）。\n点击本徽标可复制升级命令。`,
-      en: `A newer official canvas build is out: ${baseline.version || baseLabel} -> ${build.version} (master ${headLabel}).\nUpgrade: ${result.command}, then restart the canvas service.\nClick this badge to copy the upgrade command.`,
+      zh: `画布底层官方已有新构建：${baseline.version || baseLabel} → ${build.version}（master ${headLabel}）。\n点击本徽标即可自动更新（安装官方包 → 同步基线 → 重构建部署，约 1-3 分钟；服务端未就绪时回退为复制手动命令 ${result.command}）。\n完成后按提示刷新页面（PWA 客户端可能需刷新两次）。`,
+      en: `A newer official canvas build is out: ${baseline.version || baseLabel} -> ${build.version} (master ${headLabel}).\nClick this badge to update automatically (install official package -> sync baseline -> rebuild & deploy, ~1-3 min; falls back to copying the manual command if the server endpoint is not ready).\nRefresh the page when prompted (PWA clients may need two refreshes).`,
     };
     return result;
   }
