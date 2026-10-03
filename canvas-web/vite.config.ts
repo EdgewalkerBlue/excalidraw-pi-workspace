@@ -16,9 +16,9 @@ export default defineConfig({
   // 取自上游 excalidraw/excalidraw master 快照，与该版本的 npm 构建一一对应。
   define: {
     __CANVAS_BASELINE__: JSON.stringify({
-      commit: "1118751",
-      date: "2026-09-24",
-      version: "0.18.0-1118751",
+      commit: "4ce38fb",
+      date: "2026-09-28",
+      version: "0.18.0-4ce38fb",
     }),
     // 二开仓库地址：注入到官方菜单「Excalidraw links」里的自建链接（见 src/extra-menu-links.tsx）。
     // 换仓库/迁移时只改这一处。

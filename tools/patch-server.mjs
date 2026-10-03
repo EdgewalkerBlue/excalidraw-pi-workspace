@@ -127,6 +127,11 @@ export function saveAppearanceToDisk(appearance) {
 // 绑定框扩展范围内时会被推到错误的对侧边界（箭头被拉长数倍贯穿盒子）。
 // UI 绘制的箭头端点恰在边界上（outside 检查跳过）从未触发；回灌数据的端点略进入
 // 扩展框即暴露。正确公式：射线 p+t·d 与边界线相交 t=(L-px)/dx 等，取最小正 t。
+// v3（2026-10-03，clip-v3-边界容差）：官方 binding 数学写入的端点可恰落在扩展边界
+// 上（浮点误差 ~1e-13px），v2 的 outside 检查因 1ulp 舍入判为"在框内"，而真出框
+// 交点 t≈1e-13 又被 v>0.0001 滤掉，Math.min 选中对侧边界 → 端点甩出上千像素
+// （8R2bkL42nG/xb841nymEk 实测位移 1596/921px）。修复：端点距任一扩展边界 <EPS
+// 视为已出框、原样返回；出框距离不可能超过箭头自身长度，tExit>len 一并兜底。
 export function clipArrowsForRender(elements) {
     const arr = Array.isArray(elements) ? elements : Array.from(elements.values());
     const byId = new Map(arr.map(e => [e.id, e]));
@@ -136,7 +141,8 @@ export function clipArrowsForRender(elements) {
         const gap = typeof binding.gap === 'number' && binding.gap >= 0 ? binding.gap : 6;
         const L = t.x - gap, R = t.x + t.width + gap, T = t.y - gap, B2 = t.y + t.height + gap;
         const px = movingPt.x, py = movingPt.y;
-        if (px <= L || px >= R || py <= T || py >= B2) return movingPt; // 已在扩展边界外
+        const EPS = 1e-6;
+        if (px <= L + EPS || px >= R - EPS || py <= T + EPS || py >= B2 - EPS) return movingPt; // 已在扩展边界外/恰在边界上
         const ux = otherPt.x - px, uy = otherPt.y - py;
         const len = Math.hypot(ux, uy) || 1;
         const dx = ux / len, dy = uy / len; // 指向箭头另一端
@@ -144,7 +150,7 @@ export function clipArrowsForRender(elements) {
         if (dx !== 0) { ts.push((L - px) / dx, (R - px) / dx); }
         if (dy !== 0) { ts.push((T - py) / dy, (B2 - py) / dy); }
         const tExit = Math.min.apply(null, ts.filter(function (v) { return v > 0.0001; }));
-        if (!Number.isFinite(tExit)) return movingPt;
+        if (!Number.isFinite(tExit) || tExit > len) return movingPt; // 合法出框距离≤箭头长度，超限属数据异常，不动
         return { x: px + tExit * dx, y: py + tExit * dy };
     };
     const out = [];
@@ -181,9 +187,9 @@ function apply() {
   if (!fs.existsSync(PERSIST)
     || !fs.readFileSync(PERSIST, "utf8").includes("clipArrowsForRender")
     || !fs.readFileSync(PERSIST, "utf8").includes("loadAppearanceFromDisk")
-    || !fs.readFileSync(PERSIST, "utf8").includes("正确公式：射线")) {
+    || !fs.readFileSync(PERSIST, "utf8").includes("clip-v3-边界容差")) {
     fs.writeFileSync(PERSIST, PERSIST_SRC, "utf8");
-    console.log("[patch-server] persist.js 已创建/升级（落盘+轮转备份+箭头渲染裁剪v2+外观持久化）");
+    console.log("[patch-server] persist.js 已创建/升级（落盘+轮转备份+箭头渲染裁剪v3+外观持久化）");
   } else {
     console.log("[patch-server] persist.js 已存在");
   }

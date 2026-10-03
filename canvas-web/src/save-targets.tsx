@@ -14,7 +14,8 @@ import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import { toolbarButton, toolbarRow } from "./toolbar-style";
 
 const BRIDGE_KEY = "excalidraw-canvas-save-bridge";
-const DEFAULT_BRIDGE = "http://127.0.0.1:5011";
+// 跟随页面 hostname：手机经 Tailscale 访问时 127.0.0.1 会指向手机自身（中转服务需 SAVE_BRIDGE_HOST=0.0.0.0）
+const DEFAULT_BRIDGE = `http://${location.hostname}:5011`;
 
 type BridgeConfig = {
   webdav: { url: string; username: string; hasPassword: boolean; directory: string };
