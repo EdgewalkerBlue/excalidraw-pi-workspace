@@ -19,7 +19,8 @@ WORK_BRANCH=DEV
 MAIN_BRANCH=master
 REMOTE=origin
 # 上传卫生：这些路径永不入库（--include-all 可覆盖）
-# .pi/ 本机数据；exp-*.json 临时导出；AGENTS.md/CLAUDE.md/CODEBUDDY.md 为 agent 本机指令，一律不上传
+# .pi/ 本机数据（例外 .pi/task_set.json 随项目分发）；exp-*.json 临时导出；
+# AGENTS.md/CLAUDE.md/CODEBUDDY.md 为 agent 本机指令，一律不上传
 EXCLUDES=".pi exp-*.json AGENTS.md CLAUDE.md CODEBUDDY.md"
 
 DRY=0
@@ -102,7 +103,9 @@ if [ "$INCLUDE_ALL" = 1 ]; then
   printf '  ↳ --include-all：不排除任何路径\n'
 else
   for _p in $EXCLUDES; do try git reset -q -- "$_p"; done
-  printf '  ↳ 已排除上传卫生路径：%s\n' "$EXCLUDES"
+  # 全局上传卫生例外：.pi/task_set.json 随项目分发，必须上传（ignore 规则即 .pi/* + !.pi/task_set.json）
+  try git add -- .pi/task_set.json
+  printf '  ↳ 已排除上传卫生路径：%s（例外：.pi/task_set.json 保留）\n' "$EXCLUDES"
 fi
 
 # ── [2] 提交 ──────────────────────────────────────────────────────────
